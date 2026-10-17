@@ -40,6 +40,19 @@ Socket protocol: one request per connection, `transcribe <wav>` | `status` |
 Keybinding snippets (sway / Hyprland / KDE, GNOME unsupported) and the
 systemd user unit live in `packaging/`.
 
+### Push-to-talk
+
+Hold-a-key mode, works on any Wayland WM (the daemon does the recording —
+compositors only need press/release bindings):
+
+```sh
+jolt -A:time -m tinifu.ptt start   # key press    → daemon starts recording
+jolt -A:time -m tinifu.ptt end     # key release  → transcribe + type
+```
+
+sway: `bindsym $mod+z exec ... ptt start` + `bindsym --release $mod+z exec
+... ptt end`. Hyprland: `bind` / `bindr` pair. See `packaging/keybindings.conf`.
+
 ## Layout
 
 - `tinifu.audio` — pure WAV parsing and PCM16→float32 conversion (tested).

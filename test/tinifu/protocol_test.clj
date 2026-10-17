@@ -15,6 +15,10 @@
   (is (= {:cmd :status} (proto/parse-request "status")))
   (is (= {:cmd :stop} (proto/parse-request "stop"))))
 
+(deftest parse-ptt-verbs
+  (is (= {:cmd :ptt-start} (proto/parse-request "ptt-start")))
+  (is (= {:cmd :ptt-end} (proto/parse-request "ptt-end"))))
+
 (deftest parse-unknown-is-error
   (is (:error (proto/parse-request "bogus")))
   (is (:error (proto/parse-request ""))))

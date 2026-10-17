@@ -16,6 +16,8 @@
                          {:error "transcribe needs a path"}))
       "status" {:cmd :status}
       "stop" {:cmd :stop}
+      "ptt-start" {:cmd :ptt-start}
+      "ptt-end" {:cmd :ptt-end}
       {:error (str "unknown request: " line)})))
 
 (defn status->line

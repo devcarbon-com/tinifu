@@ -42,11 +42,20 @@
 (defn handle-request
   "Request map to a response line, given handlers. Pure in shape; the
   transcribe handler does the work."
-  [{:keys [cmd path error]} {:keys [state-fn transcribe-fn stop-fn]}]
+  [{:keys [cmd path error]}
+   {:keys [state-fn transcribe-fn stop-fn ptt-start-fn ptt-end-fn]}]
   (cond
     error (str "{\"error\":" (pr-str error) "}\n")
     (= :status cmd) (proto/status->line (state-fn))
     (= :stop cmd) (do (stop-fn) "{\"ok\":true}\n")
+    (= :ptt-start cmd) (let [r (ptt-start-fn)]
+                         (if (:error r)
+                           (str "{\"error\":" (pr-str (:error r)) "}\n")
+                           "{\"ok\":true}\n"))
+    (= :ptt-end cmd) (let [r (ptt-end-fn)]
+                       (if (:error r)
+                         (str "{\"error\":" (pr-str (:error r)) "}\n")
+                         (str (whistle/result->json r) "\n")))
     (= :transcribe cmd) (let [r (transcribe-fn path)]
                           (if (:error r)
                             (str "{\"error\":" (pr-str (:error r)) "}\n")
