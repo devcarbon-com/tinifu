@@ -29,3 +29,11 @@
 
 (deftest options-keyword-string-passes-through
   (is (= ["en" "jolt"] (whistle/options "en" "jolt"))))
+
+(deftest engine-source-prefers-embedded-resource
+  ;; in a built binary the vendored lib is an embedded resource; on a plain
+  ;; checkout io/resource misses and the cached path is used
+  (is (string? (whistle/engine-source))))
+
+(deftest model-source-prefers-embedded-resource
+  (is (string? (whistle/model-source nil))))

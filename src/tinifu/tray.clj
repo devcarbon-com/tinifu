@@ -3,13 +3,28 @@
   shim/libtinifu_sni.so). The shim owns the DBusConnection and all
   DBusMessageIter marshalling; Jolt drives it through a flat API:
   init / set-state / poll (returns 1=Activate, 2=SecondaryActivate) / close."
-  (:require [jolt.ffi :as ffi]))
+  (:require [clojure.java.io :as io]
+            [jolt.ffi :as ffi]))
 
-(defn- shim-path
-  "Absolute path to libtinifu_sni.so, so the binary/jar can run from any cwd:
-  $TINIFU_SHIM, then ~/.local/lib/tinifu/, then the project dir (dev)."
+(defn- resource-file!
+  "Path to a resource: as-is when on disk, extracted to a temp file when
+  embedded in a built binary (a baked resource has no filesystem path; its
+  URL reports protocol jar)."
+  [name]
+  (when-let [url (io/resource name)]
+    (if (= "jar" (.getProtocol url))
+      (let [f (java.io.File/createTempFile "tinifu-" (str "-" name))]
+        (io/copy (io/input-stream url) f)
+        (.deleteOnExit f)
+        (.getAbsolutePath f))
+      (.getPath url))))
+
+(defn shim-path
+  "Path to libtinifu_sni.so: $TINIFU_SHIM, then the embedded copy in a built
+  binary, then the committed shim/ (dev checkout)."
   []
   (or (System/getenv "TINIFU_SHIM")
+      (resource-file! "libtinifu_sni.so")
       (let [installed (str (System/getProperty "user.home")
                            "/.local/lib/tinifu/libtinifu_sni.so")]
         (if (.exists (java.io.File. installed))

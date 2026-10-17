@@ -32,7 +32,45 @@
      (string? keywords) keywords
      :else (str/join "\n" keywords))])
 
-(ffi/load-library "/home/pacman/.cache/cactus-needle/v3/3.3.1/libneedle.so")
+(defn- cache-dir
+  "Cactus cache dir: $TINIFU_CACHE, then $XDG_CACHE_HOME/cactus-needle, then
+  ~/.cache/cactus-needle (where scripts/setup.sh puts the engine and model)."
+  []
+  (or (System/getenv "TINIFU_CACHE")
+      (some-> (System/getenv "XDG_CACHE_HOME")
+              (as-> xdg (str xdg "/cactus-needle")))
+      (let [home (System/getProperty "user.home")]
+        (str home "/.cache/cactus-needle"))))
+
+(defn- resource-file!
+  "Path to a bundled resource: as-is when on disk, extracted to a temp file
+  when embedded in a built binary (a baked resource has no filesystem path;
+  its URL reports protocol jar)."
+  [name]
+  (when-let [url (io/resource name)]
+    (if (= "jar" (.getProtocol url))
+      (let [f (java.io.File/createTempFile
+               "tinifu-" (str "-" (last (str/split name #"/"))))]
+        (io/copy (io/input-stream url) f)
+        (.deleteOnExit f)
+        (.getAbsolutePath f))
+      (.getPath url))))
+
+(defn engine-source
+  "Path to libneedle.so: the bundled copy when present (in a built binary or
+  a checkout with vendor/ staged), else the setup.sh cache location."
+  []
+  (or (resource-file! "libneedle.so")
+      (str (cache-dir) "/v3/3.3.1/libneedle.so")))
+
+(defn model-source
+  "Path to whistle.cact, explicit arg first, then bundled, then cache."
+  [weights]
+  (or weights
+      (resource-file! "whistle.cact")
+      (str (cache-dir) "/whistle/2.0.0/whistle.cact")))
+
+(ffi/load-library (engine-source))
 
 (ffi/defcfn needle-load "needle_load" [:pointer :uint64] :int)
 (ffi/defcfn needle-transcribe "needle_transcribe"
@@ -76,7 +114,7 @@
   "Raw little-endian float32 mono samples (16 kHz) to a parsed result map.
   language/keywords as in `options`; word-timestamps adds :words."
   [^bytes f32 {:keys [language keywords word-timestamps weights]}]
-  (load-model! (or weights "/home/pacman/.cache/cactus-needle/whistle/2.0.0/whistle.cact"))
+  (load-model! (model-source weights))
   (let [n (quot (alength f32) 4)
         [lang kws] (options language keywords)
         out-bytes (max 65536 (* (quot n sample-rate) output-bytes-per-second))]

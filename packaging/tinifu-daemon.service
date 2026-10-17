@@ -4,9 +4,11 @@ After=graphical-session.target pipewire.service
 PartOf=graphical-session.target
 
 [Service]
-ExecStart=%h/bin/tinifu-daemon
-# Tray shim is found at ~/.local/lib/tinifu/libtinifu_sni.so (or $TINIFU_SHIM);
-# no WorkingDirectory needed.
+ExecStart=%h/bin/tinifu daemon
+# Tray shim lookup order: $TINIFU_SHIM, then the copy embedded in the binary,
+# then ~/.local/lib/tinifu/libtinifu_sni.so, then ./shim/ in the working dir.
+# Prebuilt releases need no shim install; from source, scripts/setup.sh
+# builds shim/libtinifu_sni.so.
 Restart=on-failure
 RestartSec=3
 

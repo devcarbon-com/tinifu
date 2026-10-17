@@ -1,0 +1,43 @@
+name: Release
+
+# Build the self-contained tinifu binary and publish it as a GitHub release
+# when a vX.Y.Z tag is pushed. The binary embeds the engine + model (vendored
+# from HuggingFace at build time) and the tray shim (committed).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jolt
+        run: |
+          curl -sL https://raw.githubusercontent.com/jolt-lang/jolt/main/install | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Stage vendor/ (engine + model from HuggingFace)
+        run: ./scripts/setup.sh --no-shim
+
+      - name: Build
+        run: |
+          jolt -A:time build -m tinifu.main -o tinifu --direct-link
+          rm -rf tinifu.build
+
+      - name: Smoke test
+        run: ./tinifu 2>&1 | grep -q "usage: tinifu"
+
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          tar -czf "tinifu-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" tinifu
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tinifu-*-linux-x86_64.tar.gz

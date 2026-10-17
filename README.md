@@ -1,91 +1,114 @@
 # tinifu
 
-Speech-to-text on Jolt: a Clojure-on-Chez CLI that transcribes WAV files with
-Cactus's Whistle model (from `~/projects/tinifu/needle`), calling the native
-`libneedle.so` engine directly through `jolt.ffi` — no Python involved.
+Speech-to-text for Linux that types into whatever window has focus. Hold a
+hotkey, speak, and your words appear as keystrokes — push-to-talk style, on
+any Wayland compositor. It also works as a plain CLI that transcribes WAV
+files.
 
-## Run
+Fully local: the Cactus Whistle model runs on-device through a native engine.
+No cloud, no account, no Python.
+
+## Install
+
+**Easiest: grab the prebuilt binary** from
+[GitHub Releases](https://github.com/devcarbon-com/tinifu/releases). It is
+self-contained — the speech engine, model, and tray shim are all embedded, so
+there is nothing else to download.
 
 ```sh
-cd ~/projects/tinifu
-jolt -A:time -m tinifu.transcribe clip.wav
-jolt -A:time -m tinifu.transcribe clip.wav --timestamps
-jolt -A:time -m tinifu.transcribe clip.wav --lang de --keywords "Küche,Licht"
+tar -xzf tinifu-*-linux-x86_64.tar.gz
+sudo mv tinifu /usr/local/bin/
+```
+
+**Or from source** — needs [Jolt](https://github.com/jolt-lang) ≥ 0.8 on your
+PATH:
+
+```sh
+git clone https://github.com/devcarbon-com/tinifu && cd tinifu
+./scripts/setup.sh   # downloads the engine + model, builds the tray shim
+```
+
+You'll also want for the voice-input features:
+
+- `pw-record` (PipeWire) or `arecord` — recording
+- `wtype` (or `ydotool`) — typing text
+- (optional) a tray-capable bar (waybar etc.) — tray icon
+
+## Quick start
+
+Transcribe a WAV file:
+
+```sh
+tinifu transcribe clip.wav
+```
+
+Or start the voice daemon and set up a hotkey:
+
+```sh
+tinifu daemon            # loads the model (~10 s), then serves + tray icon
+```
+
+Bind a key in your compositor (snippets for sway, Hyprland, and KDE are in
+[`packaging/keybindings.conf`](packaging/keybindings.conf)):
+
+- **Press-to-talk** — `tinifu activate`: record (up to 30 s), transcribe,
+  type into the focused window.
+- **Hold-to-talk** — bind two events to one key:
+
+  ```sh
+  tinifu ptt start   # key press    → daemon starts recording
+  tinifu ptt end     # key release  → transcribe + type
+  ```
+
+That's it — hold the key, talk, release, and the text lands where you're
+typing.
+
+To run the daemon automatically at login:
+
+```sh
+cp packaging/tinifu-daemon.service ~/.config/systemd/user/
+systemctl --user enable --now tinifu-daemon
+```
+
+## CLI
+
+```sh
+tinifu transcribe clip.wav
+tinifu transcribe clip.wav --timestamps
+tinifu transcribe clip.wav --lang de --keywords "Küche,Licht"
 ```
 
 Input must be a 16 kHz WAV (PCM16, mono or multichannel — channels downmix to
-mono). Convert with `sox in.wav -r 16000 -c 1 out.wav` when needed.
+mono). Convert when needed: `sox in.wav -r 16000 -c 1 out.wav`.
+`--timestamps` appends one `start-end word` line per word.
 
-Output is the transcript; `--timestamps` appends `start-end word` lines.
+All commands: `transcribe`, `daemon`, `activate`, `ptt`. Run `tinifu` with no
+arguments for usage.
 
-## Voice input (daemon + tray + hotkey)
+## Notes
 
-The daemon keeps the Whistle model loaded and serves a Unix socket; a tray
-icon (SNI, via a small C shim over libdbus) shows state, and a compositor
-keybinding runs one voice session: record → transcribe → type into the
-focused window (wtype).
+- The daemon serves a Unix socket (`$TINIFU_SOCK` or
+  `$XDG_RUNTIME_DIR/tinifu.sock`) with one JSON-line response per request:
+  `transcribe <wav>` | `status` | `stop`.
+- A tray icon (SNI) shows daemon state, for bars that support it. Prebuilt
+  binaries carry the shim; from source, `scripts/setup.sh` builds it.
+- From source, commands run as `jolt -A:time -m tinifu.main <command>`; build
+  a standalone binary with
+  `jolt -A:time build -m tinifu.main -o ~/bin/tinifu --direct-link`
+  (engine + model embedded, no jolt or repo needed afterwards).
 
-```sh
-# start the daemon (loads model ~10 s, then serves + tray)
-jolt -A:time -m tinifu.daemon            # or: systemctl --user start tinifu-daemon
+## Development
 
-# one-shot from a keybinding
-jolt -A:time -m tinifu.activate          # record (max 30 s) → type text
-
-# Or build standalone binaries and bind those (no jolt/cwd needed at press):
-jolt -A:time build -m tinifu.ptt -o ~/bin/tinifu-ptt --direct-link
-jolt -A:time build -m tinifu.activate -o ~/bin/tinifu-activate --direct-link
-```
-
-Socket protocol: one request per connection, `transcribe <wav>` | `status` |
-`stop`, one JSON line back. Path: `$TINIFU_SOCK` or
-`$XDG_RUNTIME_DIR/tinifu.sock`.
-
-Keybinding snippets (sway / Hyprland / KDE, GNOME unsupported) and the
-systemd user unit live in `packaging/`.
-
-### Push-to-talk
-
-Hold-a-key mode, works on any Wayland WM (the daemon does the recording —
-compositors only need press/release bindings):
-
-```sh
-jolt -A:time -m tinifu.ptt start   # key press    → daemon starts recording
-jolt -A:time -m tinifu.ptt end     # key release  → transcribe + type
-```
-
-sway (using the prebuilt `~/bin/tinifu-ptt` binary): `bindsym KP_0 exec ...
-ptt start` + `bindsym --release KP_0 exec ... ptt end` (numpad 0 as the hold
-key; a `$mod+Shift+minus` / `--release` chord works too — both can be bound
-side by side). Hyprland: `bind` / `bindr` pair with `KP_0`. See
-`packaging/keybindings.conf`.
-
-## Layout
-
-- `tinifu.audio` — pure WAV parsing and PCM16→float32 conversion (tested).
-- `tinifu.whistle` — pure result-JSON parsing and options (tested) over a thin
-  FFI layer: `needle_load` / `needle_transcribe` / `needle_last_error`.
-- `tinifu.transcribe` — CLI wiring.
-- `tinifu.protocol` / `tinifu.state` — socket line protocol and daemon state
-  machine (pure, tested).
-- `tinifu.capture` / `tinifu.inject` — pw-record/arecord and wtype/ydotool
-  command construction (pure, tested; runners injected).
-- `tinifu.server` / `tinifu.client` — POSIX AF_UNIX server/client via jolt.ffi.
-- `tinifu.session` / `tinifu.activate` — one voice session; hotkey entry point.
-- `tinifu.tray` + `shim/sni.c` — SNI tray icon; the C shim owns the DBus
-  connection and all marshalling (jolt.ffi cannot safely drive
-  DBusMessageIter directly). Build:
-  `gcc -shared -fPIC -O2 -I/usr/include/dbus-1.0 -I/usr/lib/dbus-1.0/include shim/sni.c -o shim/libtinifu_sni.so -ldbus-1`
-- `tinifu.daemon` — entry point: model + socket server + tray loop.
-
-## deps
-
-`clojure.data.json` (2.5.1) needs a `java.time.format.DateTimeFormatter`
-provider on Jolt; the `:time` alias supplies the real
-`io.github.jolt-lang/time` library, hence `jolt -A:time ...` everywhere.
-
-## Tests
-
-```sh
-jolt -A:time -e "(require 'clojure.test) (require 'tinifu.audio-test) (require 'tinifu.whistle-test) (apply clojure.test/run-tests ['tinifu.audio-test 'tinifu.whistle-test])"
-```
+- Tests: `jolt -A:time -e "(require 'clojure.test) (require 'tinifu.audio-test) (require 'tinifu.whistle-test) (apply clojure.test/run-tests ['tinifu.audio-test 'tinifu.whistle-test])"`
+- Layout: pure, tested logic in `tinifu.audio` (WAV parsing), `tinifu.whistle`
+  (result parsing + FFI), `tinifu.protocol`/`tinifu.state` (socket protocol,
+  daemon state machine), `tinifu.capture`/`tinifu.inject` (pw-record and
+  wtype command construction); side effects in `tinifu.server`/`tinifu.client`
+  (AF_UNIX via jolt.ffi), `tinifu.session` (one voice session), `tinifu.tray`
+  + `shim/sni.c` (SNI tray over a small C shim), and the entry points
+  `tinifu.transcribe`, `tinifu.daemon`, `tinifu.activate`, `tinifu.ptt`,
+  dispatched by `tinifu.main`.
+- Releasing: `./scripts/release.sh v1.2.3` builds the binary (vendored engine
+  + model and the tray shim embedded — `vendor/` is gitignored and staged by
+  `scripts/setup.sh`, `shim/libtinifu_sni.so` is committed), tars it, and
+  publishes a GitHub release.

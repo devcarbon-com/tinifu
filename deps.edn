@@ -2,7 +2,8 @@
  :deps {org.clojure/data.json {:mvn/version "2.5.1"}}
  ;; tray-loop! resolves tinifu.session at runtime via ns-resolve; the build
  ;; require scan cannot see it, so bake it in explicitly.
- :jolt/build {:include [tinifu.session]}
+ :jolt/build {:include [tinifu.session]
+              :embed ["vendor" "shim"]}
  :aliases
  {:time {:extra-deps {io.github.jolt-lang/time {:git/url "https://github.com/jolt-lang/time.git"
                                                 :git/sha "2c58d9c709a25d80608757c3026f4c656a994ef1"}}}
