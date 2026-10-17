@@ -50,8 +50,10 @@ jolt -A:time -m tinifu.ptt start   # key press    → daemon starts recording
 jolt -A:time -m tinifu.ptt end     # key release  → transcribe + type
 ```
 
-sway: `bindsym $mod+z exec ... ptt start` + `bindsym --release $mod+z exec
-... ptt end`. Hyprland: `bind` / `bindr` pair. See `packaging/keybindings.conf`.
+sway: `bindsym KP0 exec ... ptt start` + `bindsym --release KP0 exec ... ptt
+end` (numpad 0 as the hold key; any other key works the same way — e.g. a
+`$mod+z` / `--release $mod+z` chord). Hyprland: `bind` / `bindr` pair with
+`KP_0`. See `packaging/keybindings.conf`.
 
 ## Layout
 
