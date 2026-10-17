@@ -17,7 +17,7 @@
 
 static DBusConnection *conn = NULL;
 static DBusError err;
-static char item_status[32] = "Passive";
+static char item_status[32] = "Active";
 static char item_icon[128] = "audio-headphones";
 static char item_tooltip[256] = "tinifu voice input";
 static int activate_flag = 0, secondary_flag = 0;

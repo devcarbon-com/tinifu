@@ -49,14 +49,15 @@
   "Property map for the SNI interface, given current app state:
   state keyword (:idle/:listening/:transcribing/:error) and a tooltip string."
   [{:keys [state tooltip]}]
-  {"Category" "SystemServices"
+  {"Category" "ApplicationStatus"
    "Id" (item-id)
    "Title" (or tooltip "tinifu voice input")
    "Status" (case (or state :idle)
               :listening "NeedsAttention"
               :transcribing "NeedsAttention"
               :error "NeedsAttention"
-              "Passive")
+              ;; waybar hides Passive items by default; idle = Active
+              "Active")
    "IconName" (case (or state :idle)
                 :listening "audio-input-microphone"
                 :transcribing "mail-send"

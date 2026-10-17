@@ -7,7 +7,8 @@
 
 (deftest properties-idle
   (let [p (spec/properties {:state :idle})]
-    (is (= "Passive" (p "Status")))
+    (is (= "Active" (p "Status")))
+    (is (= "ApplicationStatus" (p "Category")))
     (is (= "audio-headphones" (p "IconName")))))
 
 (deftest properties-listening

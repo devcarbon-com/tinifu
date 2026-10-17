@@ -19,10 +19,16 @@
   [state stop?]
   (require 'tinifu.session)
   (let [session! (ns-resolve 'tinifu.session 'cli-session!)]
-    (tray/set-state! {:status "Passive" :icon "audio-headphones" :tooltip "tinifu: idle"})
+    (tray/set-state! {:status "Active" :icon "audio-headphones" :tooltip "tinifu: idle"})
     (loop []
       (when-not @stop?
-        (if-some [ev (tray/poll! 300)]
+        ;; a shim/DBus failure must not kill the tray thread — log and keep
+        ;; polling. recur stays outside try (Jolt forbids recur across try).
+        (let [ev (try (tray/poll! 300)
+                      (catch Exception e
+                        (println "tinifu tray:" (.getMessage e))
+                        (flush)
+                        nil))]
           (case ev
             :activate (do
                         (tray/set-state! {:status "NeedsAttention" :icon "audio-input-microphone"
@@ -36,9 +42,10 @@
                            (if error
                              {:status "NeedsAttention" :icon "dialog-error"
                               :tooltip (str "tinifu: " error)}
-                             {:status "Passive" :icon "audio-headphones"
+                             {:status "Active" :icon "audio-headphones"
                               :tooltip (str "tinifu: " text)}))))
-            :secondary (reset! stop? true))
+            :secondary (reset! stop? true)
+            nil)
           (recur)))))
   (tray/close!))
 
