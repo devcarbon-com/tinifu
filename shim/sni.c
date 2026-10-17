@@ -212,8 +212,9 @@ void sni_set_state(const char *status, const char *icon, const char *tooltip) {
     strncpy(old_icon, item_icon, sizeof(old_icon) - 1);
     old_icon[sizeof(old_icon) - 1] = '\0';
     if (status) strncpy(item_status, status, sizeof(item_status) - 1);
+    if (icon) strncpy(item_icon, icon, sizeof(item_icon) - 1);
     if (tooltip) strncpy(item_tooltip, tooltip, sizeof(item_tooltip) - 1);
-/* hosts cache properties at registration; without NewIcon/NewStatus
+    /* hosts cache properties at registration; without NewIcon/NewStatus
      * they never re-read them and the icon stays stale */
     if (icon && strcmp(icon, old_icon) != 0) emit_signal("NewIcon", NULL, NULL);
     if (status) emit_signal("NewStatus", "s", status);
