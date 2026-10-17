@@ -21,7 +21,7 @@ jobs:
           curl -sL https://raw.githubusercontent.com/jolt-lang/jolt/main/install | bash
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Stage vendor/ (engine + model from HuggingFace)
+      - name: Stage vendor dir (engine + model from HuggingFace)
         run: ./scripts/setup.sh --no-shim
 
       - name: Build
@@ -30,7 +30,7 @@ jobs:
           rm -rf tinifu.build
 
       - name: Smoke test
-        run: ./tinifu 2>&1 | grep -q "usage: tinifu"
+        run: "./tinifu | grep -q 'usage: tinifu'"
 
       - name: Package
         run: |
