@@ -21,6 +21,7 @@ static char item_status[32] = "Active";
 static char item_icon[128] = "audio-headphones";
 static char item_tooltip[256] = "tinifu voice input";
 static int activate_flag = 0, secondary_flag = 0;
+static void send_registration(void);
 
 static const char *INTROSPECTION_XML =
 "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\" "
@@ -146,6 +147,19 @@ static void handle_message(DBusMessage *msg) {
         dbus_connection_send(conn, reply, NULL);
         dbus_connection_flush(conn);
         dbus_message_unref(reply);
+    } else if (dbus_message_is_signal(msg, "org.freedesktop.DBus", "NameOwnerChanged")) {
+        /* the SNI watcher (waybar) came back — its item list is empty again */
+        DBusMessageIter it;
+        if (dbus_message_iter_init(msg, &it)
+            && dbus_message_iter_get_arg_type(&it) == DBUS_TYPE_STRING) {
+            const char *n = NULL;
+            dbus_message_iter_get_basic(&it, &n);
+            const char *new_owner = NULL;
+            if (dbus_message_iter_next(&it) && dbus_message_iter_next(&it)
+                && dbus_message_iter_get_arg_type(&it) == DBUS_TYPE_STRING)
+                dbus_message_iter_get_basic(&it, &new_owner);
+            if (new_owner && *new_owner) send_registration();
+        }
     } else if (dbus_message_is_method_call(msg, "org.kde.StatusNotifierItem", "Activate")) {
         activate_flag = 1;
         reply_string(msg, "");
@@ -166,19 +180,14 @@ int sni_init(const char *name) {
     int r = dbus_bus_request_name(conn, name, DBUS_NAME_FLAG_REPLACE_EXISTING, &err);
     if (dbus_error_is_set(&err)) return -2;
     /* Hosts (waybar etc.) only show items they know about; register ourselves. */
-    DBusMessage *reg = dbus_message_new_method_call(
-        "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
-        "org.kde.StatusNotifierWatcher", "RegisterStatusNotifierItem");
-    if (reg) {
-        /* per spec the arg is the item's object path; waybar also accepts
-         * the bus name — send the path form */
-        const char *arg = "/StatusNotifierItem";
-        dbus_message_append_args(reg, DBUS_TYPE_STRING, &arg,
-                                 DBUS_TYPE_INVALID);
-        dbus_connection_send(conn, reg, NULL);
-        dbus_connection_flush(conn);
-        dbus_message_unref(reg);
-    }
+    send_registration();
+    /* the SNI watcher is typically waybar itself: when it restarts its item
+     * list resets, so re-register on NameOwnerChanged of the watcher name */
+    dbus_bus_add_match(conn,
+        "type='signal',sender='org.freedesktop.DBus',"
+        "interface='org.freedesktop.DBus',member='NameOwnerChanged',"
+        "arg0='org.kde.StatusNotifierWatcher'", &err);
+    dbus_connection_flush(conn);
     return r; /* 1 = primary owner */
 }
 
@@ -204,10 +213,25 @@ void sni_set_state(const char *status, const char *icon, const char *tooltip) {
     old_icon[sizeof(old_icon) - 1] = '\0';
     if (status) strncpy(item_status, status, sizeof(item_status) - 1);
     if (tooltip) strncpy(item_tooltip, tooltip, sizeof(item_tooltip) - 1);
-    /* hosts cache properties at registration; without NewIcon/NewStatus
+/* hosts cache properties at registration; without NewIcon/NewStatus
      * they never re-read them and the icon stays stale */
     if (icon && strcmp(icon, old_icon) != 0) emit_signal("NewIcon", NULL, NULL);
     if (status) emit_signal("NewStatus", "s", status);
+}
+
+static void send_registration(void) {
+    DBusMessage *reg = dbus_message_new_method_call(
+        "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
+        "org.kde.StatusNotifierWatcher", "RegisterStatusNotifierItem");
+    if (!reg) return;
+    /* per spec the arg is the item's object path; waybar also accepts
+     * the bus name — send the path form */
+    const char *arg = "/StatusNotifierItem";
+    dbus_message_append_args(reg, DBUS_TYPE_STRING, &arg,
+                             DBUS_TYPE_INVALID);
+    dbus_connection_send(conn, reg, NULL);
+    dbus_connection_flush(conn);
+    dbus_message_unref(reg);
 }
 
 int sni_poll(int timeout_ms) {
