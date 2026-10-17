@@ -4,13 +4,26 @@
 
 (deftest pw-record-command
   (is (= ["pw-record" "--rate" "16000" "--channels" "1" "--format" "s16"
-          "--runtime" "30" "--" "/tmp/x.wav"]
+          "--" "/tmp/x.wav"]
          (cap/recorder-command :pw-record "/tmp/x.wav"))))
 
 (deftest arecord-command
   (is (= ["arecord" "-f" "S16_LE" "-r" "16000" "-c" "1" "-t" "wav"
           "-d" "30" "/tmp/x.wav"]
          (cap/recorder-command :arecord "/tmp/x.wav"))))
+
+(deftest max-seconds-wraps-with-timeout
+  (let [ran (atom [])]
+    (cap/record! "/tmp/x.wav" {:max-seconds 30
+                               :runner (fn [cmd] (swap! ran conj cmd) {:exit 124})})
+    (is (= ["timeout" "30" "pw-record" "--rate" "16000" "--channels" "1"
+            "--format" "s16" "--" "/tmp/x.wav"]
+           (first @ran)))))
+
+(deftest timeout-kill-counts-as-success
+  (is (= :pw-record
+         (cap/record! "/tmp/x.wav" {:max-seconds 10
+                                    :runner (fn [_] {:exit 124})}))))
 
 (deftest record-uses-first-tool
   (let [ran (atom [])]

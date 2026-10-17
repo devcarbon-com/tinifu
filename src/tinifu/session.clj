@@ -26,10 +26,13 @@
       {:error "no recorder available"})))
 
 (defn cli-session!
-  "Session with real process runners and daemon-backed transcription."
-  [{:keys [sock-path] :or {sock-path (or (System/getenv "TINIFU_SOCK")
-                                         (str (or (System/getenv "XDG_RUNTIME_DIR") "/tmp")
-                                              "/tinifu.sock"))}}]
+  "Session with real process runners and daemon-backed transcription.
+  :max-seconds caps the recording (default 30)."
+  [{:keys [sock-path max-seconds]
+    :or {sock-path (or (System/getenv "TINIFU_SOCK")
+                       (str (or (System/getenv "XDG_RUNTIME_DIR") "/tmp")
+                            "/tinifu.sock"))
+         max-seconds 30}}]
   (require 'tinifu.client)
   (let [client (ns-resolve 'tinifu.client 'request)]
     (run-session!
@@ -38,5 +41,5 @@
                          (if resp
                            (whistle/parse-result resp)
                            {:error "daemon unreachable"})))
-      :capture-opts {:runner runner/run}
+      :capture-opts {:runner runner/run :max-seconds max-seconds}
       :inject-opts {:runner runner/run}})))

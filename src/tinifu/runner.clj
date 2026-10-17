@@ -3,7 +3,11 @@
   (:require [jolt.process :as p]))
 
 (defn run
-  "Run a command vector, block, return {:exit n}."
+  "Run a command vector, block, return {:exit n}. A command that cannot be
+  executed at all (binary missing) counts as a non-zero exit so callers'
+  fallback chains work."
   [cmd]
-  (let [{:keys [exit]} (p/sh cmd)]
-    {:exit exit}))
+  (try
+    (let [{:keys [exit]} (p/sh cmd)]
+      {:exit exit})
+    (catch Exception _ {:exit 127})))
