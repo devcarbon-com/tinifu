@@ -5,7 +5,18 @@
   init / set-state / poll (returns 1=Activate, 2=SecondaryActivate) / close."
   (:require [jolt.ffi :as ffi]))
 
-(ffi/load-library (str (System/getProperty "user.dir") "/shim/libtinifu_sni.so"))
+(defn- shim-path
+  "Absolute path to libtinifu_sni.so, so the binary/jar can run from any cwd:
+  $TINIFU_SHIM, then ~/.local/lib/tinifu/, then the project dir (dev)."
+  []
+  (or (System/getenv "TINIFU_SHIM")
+      (let [installed (str (System/getProperty "user.home")
+                           "/.local/lib/tinifu/libtinifu_sni.so")]
+        (if (.exists (java.io.File. installed))
+          installed
+          (str (System/getProperty "user.dir") "/shim/libtinifu_sni.so")))))
+
+(ffi/load-library (shim-path))
 
 (ffi/defcfn sni-init "sni_init" [:string] :int)
 (ffi/defcfn sni-set-state "sni_set_state" [:string :string :string] :void)

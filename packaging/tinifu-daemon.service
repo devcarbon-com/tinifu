@@ -5,7 +5,8 @@ PartOf=graphical-session.target
 
 [Service]
 ExecStart=%h/bin/tinifu-daemon
-WorkingDirectory=%h/projects/tinifu
+# Tray shim is found at ~/.local/lib/tinifu/libtinifu_sni.so (or $TINIFU_SHIM);
+# no WorkingDirectory needed.
 Restart=on-failure
 RestartSec=3
 
