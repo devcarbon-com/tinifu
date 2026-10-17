@@ -119,6 +119,20 @@ int sni_init(const char *name) {
     if (!conn || dbus_error_is_set(&err)) return -1;
     int r = dbus_bus_request_name(conn, name, DBUS_NAME_FLAG_REPLACE_EXISTING, &err);
     if (dbus_error_is_set(&err)) return -2;
+    /* Hosts (waybar etc.) only show items they know about; register ourselves. */
+    DBusMessage *reg = dbus_message_new_method_call(
+        "org.kde.StatusNotifierWatcher", "/StatusNotifierWatcher",
+        "org.kde.StatusNotifierWatcher", "RegisterStatusNotifierItem");
+    if (reg) {
+        /* per spec the arg is the item's object path; waybar also accepts
+         * the bus name — send the path form */
+        const char *arg = "/StatusNotifierItem";
+        dbus_message_append_args(reg, DBUS_TYPE_STRING, &arg,
+                                 DBUS_TYPE_INVALID);
+        dbus_connection_send(conn, reg, NULL);
+        dbus_connection_flush(conn);
+        dbus_message_unref(reg);
+    }
     return r; /* 1 = primary owner */
 }
 
