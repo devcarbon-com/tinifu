@@ -1,0 +1,32 @@
+;; The agentic loop as data. This file is the factory default: a project's
+;; first run copies it to .samizdat/manifests/loop.edn, and from then on the
+;; project's copy is what runs. Cells are registered in samizdat.agent.cells; this
+;; definition carries the routing — which is exactly the part an agent can
+;; safely rewrite, behind compile-time validation.
+;;
+;; The turn itself — assemble through route — is manifests/turn.edn, which this
+;; extends. What this file adds is how a run ENDS: every terminal verdict goes
+;; through :distil and then :finish, the whole-run teardown.
+{:description "The factory loop: a single branch iterating a turn at a time until it ships or gives up. The simplest driver — no fan-out, no critic, no supervisor. The baseline every other workflow specializes."
+ :extends "turn"
+
+ :cells {:distil :memory/distil
+         :finish :loop/finish}
+
+ ;; Every ending goes through :distil first. A run that gave up has the most
+ ;; valuable gotchas in it, so reflection is not a reward for success — it is
+ ;; what a finished task owes the next one.
+ :edges {:route  {:continue  :start
+                  :done      :distil
+                  :abandoned :distil
+                  :exhausted :distil}
+         :distil :finish
+         :finish :end}
+
+ :invariants
+ [{:type :must-precede :cell :distil :before :finish :enforced true
+   :protects "A task that ended wrote down what it learned about the project
+              before the branch closed. Asking the model to remember things
+              produced nothing across 46 turns of live runs; a step in the
+              graph runs whether or not it feels like it, and putting it before
+              :finish is what stops a future edit routing an ending around it."}]}

@@ -1,0 +1,26 @@
+;; Decompose-on-stuck (karamazov-ioo.15): solve a task by attempting it directly
+;; and, when a unit gets stuck, splitting it into sub-units, solving those first,
+;; then assembling — recursively, bounded by a depth budget.
+;;
+;;   plan-free: no up-front size guess. :decompose/run drives
+;;   samizdat.agent.decompose/solve, which attempts each unit with an implementor
+;;   worker, and on a stuck unit asks an ARCHITECT (config :roles
+;;   :architect) to decompose or hint a fresh approach. A landed unit is a stable
+;;   subassembly (it changed the tree and shipped); its parent composes it.
+;;
+;; Select with config :run :loop "decompose". Assign models per role as usual
+;; (e.g. a cheap implementor, a stronger architect).
+{:description "Decompose-on-stuck: attempt the task directly, and when a unit can't pass its tests, an architect splits it into smaller single-responsibility sub-units, builds and tests those first, then assembles — recursively. Use this when an implementor keeps failing a task in one shot; it breaks the work into pieces a weaker model can actually do."
+ :input-schema
+ ;; What a driver hands this manifest to start a run. mycelium checks it in
+ ;; run-compiled BEFORE any cell runs, so a caller that builds the map wrongly
+ ;; is told which key, instead of a nil surfacing several cells later.
+ [:map [:branch :map] [:turn :int]]
+
+ :cells {:start  :loop/assemble
+         :solve  :decompose/run
+         :finish :loop/finish}
+
+ :edges {:start  :solve
+         :solve  :finish
+         :finish :end}}

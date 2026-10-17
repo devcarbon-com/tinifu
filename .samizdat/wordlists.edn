@@ -1,0 +1,543 @@
+;; The claim-text lexicon: curated wordlists AND the parameters that decide
+;; how claim text is tokenized and compared, as data rather than as literals
+;; baked into src (tier 1c). Read through samizdat.lexicon.
+;;
+;; Four readers: the relevance filter (state.clj advances-thesis?), the
+;; answer-evidence gate (ship.clj answer-tokens / uncovered-tokens), the
+;; ledger's near-duplicate collapse (store/artifacts.clj) and the failure
+;; log's search (store/failures.clj). Every one of them decides, from words
+;; the model produced, whether two pieces of text say the same thing.
+;;
+;; A word on a list carries no specific claim, so widening a list weakens its
+;; gate; a minimum length or a similarity threshold decides what counts as a
+;; match at all, so lowering one weakens the gate the same way from the other
+;; side. Both kinds of value earn their place the same way, and the comments
+;; recording WHY move with them: retuning without the history is how gates get
+;; quietly weakened.
+
+{:claim-relevance
+ ;; The relevance guard's stopwords: grammar and framing a thesis and a
+ ;; confirmed claim share regardless of whether one advances the other.
+ ;; Token-intersection cannot see meaning, so these words are removed before
+ ;; it runs.
+ #{"the" "a" "an" "is" "are" "and" "or" "of" "for" "with" "that" "this" "it"
+   "to" "in" "on" "all" "any" "can" "has" "have" "was" "were" "be" "by" "as"
+   "clpfd" "prolog" "smt" "lean" "works" "available" "loaded" "basic"
+   "supports" "simple" "test" "check" "verify" "verified" "example"}
+
+ :truncated-finish-reasons
+ ;; finish_reason values that mean the reply was cut short, not finished: the
+ ;; fix is more tokens or a retry, never steering (fence/signals :truncated).
+ ;; DeepSeek sends insufficient_system_resource when it stops generating
+ ;; under load (karamazov-6uyv).
+ #{"length" "insufficient_system_resource"}
+
+ :surviving-findings
+ ;; The heading a verify pass puts over the findings it kept (karamazov-kdoj).
+ ;; When a reply has one, only what is under it is read as findings: the
+ ;; reasoning above it quotes candidates' severity tags and used to be stored
+ ;; as the findings and handed to the retry.
+ #{"surviving findings" "findings that survive" "remaining findings"}
+
+ :request-framing
+ ;; Words that frame a REQUEST rather than name its subject — what to do and
+ ;; where to say it. The problem-relevance rung drops them from the PROBLEM's
+ ;; terms before asking whether the answer shares one: "explain the project in
+ ;; the chat" has nothing left, so any answer engages it, where "fix the
+ ;; parser" still has `parser` (karamazov-1wv9). Widening this list weakens
+ ;; that rung, so an entry is an instruction word, never a subject.
+ #{"explain" "explanation" "describe" "description" "summarize" "summarise"
+   "summary" "overview" "tell" "me" "please" "chat" "project" "codebase"
+   "repo" "repository" "what" "how" "does" "work" "works" "understand"
+   "walk" "through" "give" "let's" "lets" "us"}
+
+ :answer-framing
+ ;; Grammar plus the vocabulary a model uses to FRAME an answer rather than
+ ;; to assert one. The gate is aimed at specifics — numbers, names,
+ ;; witnesses — because that is where fabrication actually happens; "the
+ ;; answer is" is not a claim about anything. Widening this list weakens the
+ ;; gate, so entries earn their place by being framing rather than content.
+ #{"the" "a" "an" "is" "are" "was" "were" "of" "for" "and" "or" "not" "no"
+   "in" "on" "to" "with" "that" "this" "it" "as" "by" "at" "be" "there"
+   "exists" "all" "any" "we" "have" "has" "can" "so" "if" "then" "thus"
+   "answer" "solution" "solutions" "result" "results" "value" "values"
+   "therefore" "hence" "conclusion" "shows" "show" "proved" "proven"
+   "verified" "confirms" "confirmed" "follows" "given" "which" "where"
+   "does" "do" "did" "follow" "following" "having" "from" "into" "than"
+   "when" "while" "because" "since" "about" "over" "under" "between"
+   "unique" "uniquely" "only" "exactly" "such" "these" "those" "each"
+   "every" "must" "also" "both" "same" "case" "cases" "holds" "true" "false"
+
+   ;; Provenance vocabulary: how the answer was checked, not what it
+   ;; claims. These can never appear in an artifact, because an artifact's
+   ;; claim and code are about the problem and say nothing about the engine
+   ;; that ran them. Leaving them in made the gate refuse answers for
+   ;; asserting the word "mathlib", which pushed the model toward stripping
+   ;; every explanatory sentence to get past it — the opposite of what the
+   ;; harness wants its answers to look like. The proof-engine names stay
+   ;; even though the engines left: they are still provenance if they
+   ;; appear.
+   "lean" "mathlib" "prolog" "clpfd" "swipl" "z3" "smt" "smtlib" "octave"
+   "engine" "engines" "harness" "kernel" "kernel-checked" "machine-checked"
+   "theorem" "theorems" "lemma" "lemmas" "proof" "proofs" "tactic" "tactics"
+   "statement" "statements" "universal" "universally" "induction" "inductive"
+   "base" "step" "successor" "encoding" "encodings" "formalisation"
+   "formalization" "independent" "independently" "cross-check" "cross-checked"
+   ;; Generic mathematical prose. "equals" and "numbers" carry no specific
+   ;; content — the specific part is the number or name they connect.
+   "number" "numbers" "equal" "equals" "integer" "integers" "natural"
+   "naturals" "first" "sums" "pairwise" "distinct" "positive"
+
+   ;; The vocabulary of SCOPING an answer: saying what was and was not
+   ;; settled, and how sure of it you are. What you failed to establish is,
+   ;; by construction, not in your evidence; a gate that reads naming it as
+   ;; asserting it makes honesty impossible (vf-w2k).
+   "stated" "states" "fact" "facts" "establish" "establishes" "established"
+   "evidence" "check" "checks" "checked" "unchecked" "found" "finds"
+   "finding" "findings" "showed" "shown" "showing"
+   "prove" "proves" "proving" "support" "supports"
+   "supported" "settle" "settles" "settled" "unsettled" "unresolved"
+   "resolve" "resolves" "resolved" "ask" "asks" "asked" "question"
+   "questions" "answers" "answered" "unanswered" "claim" "claims"
+   "claimed" "assert" "asserts" "asserted" "conclude" "concludes"
+   "remain" "remains" "remaining"
+   "outstanding" "together" "against" "general" "generally" "partial"
+   "partially" "whenever" "conditional" "conditionally" "arbitrary"
+   "computation" "computations" "computed" "search" "searched" "taken"
+   "what" "branch" "branches" "verify" "verifies" "verification"
+   "establishing" "demonstrate" "demonstrates" "demonstrated"
+   ;; Deictics. A word that points at the document rather than at the
+   ;; substance cannot be an assertion about the substance.
+   "here" "above" "below" "within" "throughout"
+   "reach" "reaches" "reached" "give" "gives" "yield" "yields" "open"}
+
+ :claim-matching
+ ;; How claim text is turned into something comparable, before any wordlist
+ ;; is consulted. Every one of these was a bare number in src/ — under a
+ ;; paragraph of justification in two cases, which reads as diligence and is
+ ;; exactly as unreachable to a supervisor as an anonymous literal.
+ ;;
+ ;; They are the same KIND of knob as the stopword lists above: a gate that
+ ;; asks "do these two claims say the same thing" answers differently when
+ ;; the minimum token is three characters instead of four, and nothing about
+ ;; the right answer is universal — a Lean campaign and a Rust refactor
+ ;; disagree about what a meaningful token looks like.
+ {:min-token-length 4
+  ;; Tokens shorter than this carry no content of their own. state.clj's
+  ;; relevance filter and ship.clj's answer gate both drop them.
+
+  :min-search-token-length 3
+  ;; The floor for a SEARCH term rather than a claim token, used by the
+  ;; shared-artifact FTS query and the failure log. Lower than the claim
+  ;; minimum on purpose: a search is ranked and recall matters more than
+  ;; precision, while a gate's verdict is binary.
+
+  :min-stem-length 5
+  ;; Never singularize below this. `is` must not become `i`, and nothing may
+  ;; be stemmed into a collision with a different word.
+
+  :shingle-width 4
+  ;; Words per shingle for the ledger's near-duplicate Jaccard. Wide enough
+  ;; that two claims sharing ordinary phrasing do not match; narrow enough
+  ;; that one rewording does not hide a duplicate.
+
+  :near-duplicate-threshold 0.6
+  ;; Jaccard at or above this and two claims are the same claim. Read live
+  ;; off gen-22, where three branches proved one inequality and the ledger
+  ;; listed it three times; the live duplicates differed only in variable
+  ;; names and an `i.e.` for a `so`.
+
+  :answer-token-min-length 4
+  ;; ship.clj: the shortest token the answer-evidence gate will hold against
+  ;; an answer. Separate from :min-token-length because this one decides
+  ;; whether a SHIP is refused, and a gate that blocks delivery earns a
+  ;; knob of its own.
+
+  :answer-suffix-min-stem 5
+  ;; ship.clj: never strip a suffix that would leave a stem shorter than
+  ;; this.
+
+  :answer-prefix-token-length 8
+  :answer-prefix-match-length 6
+  ;; ship.clj: a token this long (8) is considered covered when its first
+  ;; six characters appear in the answer text. Long words survive
+  ;; inflection that the suffix table does not enumerate.
+  }
+
+ :usage-cap-signals
+ ;; How a provider says "you are out of budget" rather than "slow down", in
+ ;; the error TEXT of a 429 — the status alone cannot tell the two apart, and
+ ;; the difference decides whether the retry ladder waits or gives up. A cap
+ ;; wearing a rate limit's headers cannot be waited out inside a run.
+ ;;
+ ;; Deliberately NARROW: misreading a rate limit as a cap costs the run. The
+ ;; English signals cover OpenAI and DeepSeek; GLM/Zhipu report a daily usage
+ ;; cap as error code 1308 with a Chinese 使用上限 message, and some gateways
+ ;; phrase it "per-day".
+ ;;
+ ;; The bare numbers are BigModel's business codes, which ride in the error
+ ;; body with a message that names nothing in the English list. The set is
+ ;; the vendor's own — ZCode (Zhipu's client, karamazov-luqc.3) keeps it as
+ ;; the codes a workflow stops on to wait for quota rather than retry: 1005
+ ;; 1304 1308 1310 1313 1316-1321 2056 20097 3008-3010 — and its
+ ;; OpenAI/Anthropic-family strings for the same wall (credit_balance_exhausted,
+ ;; the spend_limit and usage_limit families). 3008-3010 and 1304 were once
+ ;; read as retryable concurrency caps; the table, read directly on
+ ;; 2026-09-24, marks all four retryable false (karamazov-jvdu). What it
+ ;; marks RETRYABLE is :retryable-business-codes below. The codes are bounded
+ ;; on both ends so a token count cannot match them.
+ ;;
+ ;; Here rather than in the adapter because it is a fact about PROVIDERS, and
+ ;; providers change their error text without asking. A user hitting a new
+ ;; gateway's wording should be able to add it and keep working, not wait for
+ ;; a release. Kept as a string because EDN has no regex literal.
+ "(?i)insufficient|quota|billing|exceeded your current|payment|per-day|daily limit|credit_balance_exhausted|spend_limit_exceeded|usage_limit_exceeded|使用上限|每日|\\b(1005|1304|1308|1310|1313|131[6-9]|132[01]|2056|20097|300[89]|3010)\\b"
+
+ :retryable-business-codes
+ ;; BigModel business codes that mean TRY AGAIN — a per-minute limit (1302
+ ;; 1303 1305), an overload (1312), a server or network hiccup (1120 1230
+ ;; 1234 2007 3002) — from ZCode's own table (Zhipu's client,
+ ;; failure-provider-business-codes.ts, read 2026-09-24). Retried whatever
+ ;; HTTP status carries them: GLM answers some under a 400, or inside a 200,
+ ;; and the status ladder alone called those fatal (karamazov-jvdu). Matched
+ ;; against the CODE — the body's code / error_code field, or a `[1302]`
+ ;; prefix on its message — never against free text, where a figure is not a
+ ;; code. A set of strings.
+ #{"1120" "1230" "1234" "1302" "1303" "1305" "1312" "2007" "3002"}
+
+ :tool-version
+ ;; A tool name followed by its version. Stripped BEFORE tokenizing,
+ ;; because the version is a bare number and numbers are the part of the
+ ;; answer gate that must not be relaxed — "Python 3" would otherwise
+ ;; assert the number 3 and get refused for it. Narrow on purpose: only a
+ ;; number directly after a known tool name. Kept as a string because EDN
+ ;; has no regex literal; the consumers re-pattern it.
+ "(?i)\\b(lean|mathlib|z3|swipl|swi-prolog|prolog|octave|clojure|jolt|python|node|java|deepseek)[\\s-]*[0-9]+(\\.[0-9]+)*"
+ :empty-section
+ ;; What a model writes when it has nothing to put in a section it was asked
+ ;; to fill. A reflector told to leave GOTCHAS empty almost never leaves it
+ ;; empty — it writes "None." or "N/A" or a bracketed placeholder echoed back
+ ;; from the template, and every one of those becomes a memory the next run
+ ;; is shown unless it is recognised here.
+ ;;
+ ;; A regex PATTERN STRING, re-patterned at the use site, matched against a
+ ;; WHOLE line. Widening it starts eating real content — a memory that
+ ;; genuinely reads "N/A on this project" is a fact — so entries earn their
+ ;; place by being placeholders and nothing else.
+ "(?i)none\\.?|n/?a\\.?|\\[.*\\]"
+
+ :fold-role-refusal
+ ;; How a chat template words its refusal of a system message that is not
+ ;; first — Qwen3.5's Jinja says "System message must be at the beginning"
+ ;; (karamazov-fp21.2). The startup fold-role probe sends exactly that shape
+ ;; and reads a 4xx/5xx body against this PATTERN STRING: a match means the
+ ;; fold must carry the user role; any other error is inconclusive and
+ ;; changes nothing. Case-insensitive on purpose — the wording is the
+ ;; template author's, and one word is the whole signal.
+ "(?i)system"
+
+ :context-overflow
+ ;; How providers word a context-window overflow (karamazov-d41). A 500
+ ;; carrying one of these is DETERMINISTIC — the same oversized prompt fails
+ ;; the same way every time — so it must never be retried on backoff (the
+ ;; Qwen baseline burned 3 attempts x up to 32s per turn against llama-server's
+ ;; wall) and instead triggers the context squeeze (gates.edn
+ ;; :context-squeeze). A regex PATTERN STRING matched against the raw
+ ;; response body; it has to track how endpoints actually word it:
+ ;; llama.cpp says 'Context size has been exceeded', OpenAI-compatible
+ ;; servers say 'maximum context length' / 'context_length_exceeded', and
+ ;; GLM/Zhipu answers a 400 with code 1261 and 'Prompt exceeds max length'
+ ;; (measured live 2026-09-06) — which matches none of the above, so a GLM
+ ;; overflow was retried on backoff instead of squeezing the branch.
+ "(?i)context (size|length|window)|context_length_exceeded|maximum context|prompt exceeds max length|\"?1261\"?"
+
+ :failure-layers
+ ;; How a failure names the layer it belongs to (karamazov-i1u). The
+ ;; supervisor can edit userspace and cannot reach the compiled base, so
+ ;; telling it which side a crash lives on is the difference between a
+ ;; one-turn escalation and half a run spent hunting a source tree it will
+ ;; never be allowed to open. Regex PATTERN STRINGS, re-patterned at the use
+ ;; site, matched against the error text.
+ ;;
+ ;; :userspace is tested FIRST and wins a tie: a cell frame in a trace means
+ ;; the cell is the thing that can actually be edited, whatever base code it
+ ;; went on to call.
+ {:userspace ["\\bcells[./]" "manifest|prompts?/|gates\\.edn|phases\\.edn"]
+  :base ["\\bsamizdat[./]"]}
+
+ :directive-kinds
+ ;; What each directive kind DOES, in the words a person at the control API
+ ;; and the supervisor calling `intervene` are shown. The names are the
+ ;; store's (samizdat.store.interventions/kinds — each has a drain that
+ ;; applies it), the words are here, and a coherence test keeps the two
+ ;; sets equal. Three boundaries own them: a branch's own steer boundary
+ ;; (message, review), the beam's round top (cull, fork, retract, extend,
+ ;; pause, resume), and the feature loop's directives stage (switch, budget,
+ ;; stop) — see RFC-012.
+ {"message" "Inject text into a branch's next turn."
+  "review"  "Tell a branch to cross-check and ship what it has."
+  "cull"    "Stop a branch. Refused if it is the last one running."
+  "fork"    "Open a sibling branch on a stated thesis."
+  "retract" "Un-confirm an artifact that was not what it claimed. Payload: {\"artifact_id\": N, \"reason\": \"...\"}."
+  "extend"  "Raise the run's turn cap by N turns (text: \"N\", or {\"turns\": N})."
+  "pause"   "Stop scheduling new turns; in-flight turns finish."
+  "resume"  "Resume scheduling."
+  "switch"  "Switch the feature loop's implement strategy for its next round: board, team or decompose (text: the name). Lands at the loop's next round boundary."
+  "budget"  "Set the per-owner turn budget the feature loop's following rounds run under (text: \"N\", or {\"turns\": N})."
+  "stop"    "End the run unsolved at the feature loop's next round boundary: the loop has concluded it cannot solve the task. Partial work stays on disk (text: why)."}
+
+ :shell-refusal
+ ;; How the shell policy phrases a refusal. Read to turn a refused command
+ ;; into a durable project fact, which is worth more than it looks: it saves
+ ;; the next run the turn it would spend learning the same refusal.
+ ;;
+ ;; A regex PATTERN STRING, re-patterned at the use site. It matches the
+ ;; TOOL RESULT, so it has to track how the policy actually words itself —
+ ;; if the refusal text is reworded and this is not, the fact silently stops
+ ;; being recorded and nothing fails.
+ "(?i)needs approval|not on the allow list"
+
+ ;; --- what is presentation in a shell command (karamazov-h27r) -------------
+ ;; distil-project! keys a `works here` fact on the command string, and after
+ ;; ten runs the store held 47 memories saying the test command works, one
+ ;; per `| tail -N` the model happened to read it through. Regex PATTERN
+ ;; STRINGS, each matching a TRAILING piece that changes how the model reads a
+ ;; command's output and nothing about what runs; applied to a fixed point, so
+ ;; `2>&1 | tail -40; echo EXIT=$?` falls away layer by layer. Only trailing
+ ;; forms belong here — a leading `cd dir &&` changes what the command means
+ ;; and stays. Successes only: a REFUSED command keeps its exact text, because
+ ;; the pipe may be the very thing the policy refused.
+ :command-noise
+ ["\\s*2>&1\\s*$"
+  "\\s*\\|\\s*(?:tail|head)(?:\\s+-n)?\\s+-?\\d+\\s*$"
+  "\\s*;\\s*echo\\s+[\"']?EXIT[=:]\\s*\\$\\?[\"']?\\s*$"]
+
+ ;; --- the completeness rung (karamazov-g86, dirge completeness_gate.rs) ----
+ ;; A `done` whose answer says, in the model's own first-person voice, that
+ ;; work remains — the most ordinary way for an autonomous run to end badly,
+ ;; and the one shape with no backstop: it edits real files, runs real
+ ;; checks, claims nothing false, and stops halfway. The rung fires only when
+ ;; ONE SENTENCE holds all three: a first-person forward marker, a work verb,
+ ;; and no second-person address (advice to the reader is not a plan to
+ ;; continue). dirge's warning travels with the lists: do NOT widen the
+ ;; patterns to catch more — the conjunction IS the control, and widening any
+ ;; one list turns honest summaries into blocked ships.
+
+ :completeness-forward
+ ;; First-person forward markers: the model announcing ITS OWN next step.
+ #{"i will" "i'll" "i still" "i haven't" "i have not" "i need to"
+   "i plan to" "i intend to" "next i" "then i" "i am going to"
+   "i'm going to"}
+
+ :completeness-work-verbs
+ ;; The verbs that make a forward-marked sentence a plan to keep working
+ ;; rather than a remark. Deliberately concrete engineering verbs only.
+ #{"implement" "add" "write" "fix" "finish" "complete" "wire" "test"
+   "verify" "refactor" "handle" "integrate" "extend" "hook" "migrate"
+   "polish" "clean"}
+
+ :completeness-second-person
+ ;; Second-person address: the sentence is advice to the reader, not the
+ ;; model's own plan, and advising follow-ups is a legitimate way to end.
+ #{"you " "your " "you'll" "you can" "you should" "you may" "you might"
+   "let me know"}
+
+ :asks-the-reader
+ ;; The done-asks-the-reader ship rung (karamazov-a6mj.3; thinkingbox's rule
+ ;; that a final message may not both close and ask). Phrases that make the
+ ;; LAST line of an answer a request to whoever reads it: a question with a
+ ;; second-person subject, an offer of more work, a request for confirmation
+ ;; or information. Checked on the last non-blank line only — a rhetorical
+ ;; question the answer goes on to answer, or the `?` operator in prose, is
+ ;; not a request — and a question form fires only WITH one of these, so a
+ ;; sentence like "Is the clamp right? I checked: yes" is left alone. Word
+ ;; starts, like the completeness lists: "you" matches "you'd" and not "bayou".
+ ;; Do not widen it on a hunch; measure a miss first, then add the phrase that
+ ;; carried it.
+ #{"you " "your " "you'd" "you'll" "do you" "would you" "shall i" "should i"
+   "want me to" "like me to" "let me know" "please confirm" "please provide"
+   "please let" "please tell" "which one" "which did you" "what would you"}
+
+ :html-strip
+ ;; Turning a fetched page into readable text (karamazov-fn68.2). Ordered
+ ;; [pattern replacement] pairs applied in sequence: script and style dropped
+ ;; whole before anything else, then the block tags that imply a line break,
+ ;; then every remaining tag, then the entities.
+ ;;
+ ;; DATA because it is a vocabulary, and base-test is right to insist: a
+ ;; project fetching a site that marks up its docs differently should be able
+ ;; to retune this without a rebuild. The CONFINEMENT — which hosts may be
+ ;; reached at all — stays mechanism in src/, because a guard the agent can
+ ;; edit is not a guard.
+ [["(?is)<(script|style)\\b.*?</\\1>" " "]
+  ["(?is)<!--.*?-->" " "]
+  ["(?i)<br\\s*/?>" "\n"]
+  ["(?i)</(p|div|li|h[1-6]|tr)>" "\n"]
+  ["(?s)<[^>]+>" ""]
+  ["&nbsp;" " "] ["&amp;" "&"] ["&lt;" "<"] ["&gt;" ">"]
+  ["&quot;" "\""] ["&#39;" "'"]
+  ["[ \t]+" " "]
+  ["\n{3,}" "\n\n"]]
+
+ :negation-markers
+ ;; What makes a memory a DENIAL rather than an assertion (karamazov-ei6t.8).
+ ;; Used to tell a claim from its own negation over the same subject — the
+ ;; shape of karamazov-ko5b, where "require of flight.* FAILS" stood beside a
+ ;; run whose own turns showed requires loading.
+ ;;
+ ;; Matched with a trailing space so `no ` cannot read out of `note` and
+ ;; `not ` cannot read out of `nothing`. Same boundary discipline as the
+ ;; completeness lists, and the same warning: widening this makes the
+ ;; contradiction test fire on ordinary refinements, and a detector that
+ ;; refuses refinements is worse than no detector.
+ #{"not" "never" "fails" "failed" "cannot" "can't" "no" "without" "refuses"}
+
+ :environment-blocked
+ ;; Output that says the HOST refused an acceptance :check, not the work
+ ;; (karamazov-na2k.24): raylib with no window server. A check that prints one
+ ;; of these is tried once more and then counted as undecided rather than
+ ;; failed. Narrow on purpose: every phrase here is a way for a real failure
+ ;; to be excused, so add one only for an output that measured as the host's.
+ #{"Failed to initialize platform"}
+
+ :completeness-blocked
+ ;; A stated LIMIT, which is a result rather than a plan. Same first-person
+ ;; voice and the same work verb as an abandoned intention — "I have not been
+ ;; able to test the visual output" against "I still need to test the CLI" —
+ ;; and the opposite meaning: one says what the run FOUND, the other what it
+ ;; chose to leave.
+ ;;
+ ;; MEASURED, on run dbe64eea-successor of the arena sweep. The owner was told
+ ;; to exercise its change on screen; the host had no window server, so the
+ ;; requirement was impossible. Against the real problem text, the two most
+ ;; natural ways to SAY that were both refused by this rung, while an answer
+ ;; that simply did not mention the requirement shipped. The critic then
+ ;; failed the round for exactly that: "the requirement is silently dropped
+ ;; rather than met or escalated as a blocker". A gate that refuses the honest
+ ;; answer and passes the silent one is not failing to catch omission, it is
+ ;; selecting for it.
+ ;;
+ ;; The precedent this restores is run 623ccae8, which met a display-less host
+ ;; by running its own counterfactual and writing "HONEST LIMIT: actual frame
+ ;; rendering cannot be verified on this display-less host". That shipped only
+ ;; because the nominal phrasing happens to carry no forward marker — the
+ ;; behaviour was right and the gate let it through by luck.
+ ;;
+ ;; The same do-not-widen warning applies, and HARDER here, because this list
+ ;; silences the rung rather than firing it — every phrase added is a way for
+ ;; an abandoned plan to escape.
+ ;;
+ ;; So it is anchored on FIRST-PERSON INABILITY, and that anchor is the whole
+ ;; design. A third-person obstacle phrase reads the same in a limit and in a
+ ;; plan: "I will fix the parser that fails to handle escapes" states an
+ ;; obstacle and is exactly the abandoned intention this rung exists to catch.
+ ;; Only the model saying IT could not do the thing distinguishes them, and
+ ;; every entry below therefore names the model as the one blocked.
+ ;;
+ ;; The cost is a phrasing like "I still need to verify this, but the run
+ ;; fails" — a limit with a plan's opening, which still refuses. That is the
+ ;; right trade: the refusal now tells the model to say what it could not do
+ ;; and why, so the fix is one rephrase away, while the looser list would have
+ ;; turned the rung off for a whole class of genuine plans.
+ #{"i could not" "i couldn't" "i cannot" "i can't"
+   "i was unable" "i am unable" "i'm unable" "i have not been able"
+   "i haven't been able" "i was not able" "i wasn't able"}
+
+ :eval-hints
+ ;; An eval error, mapped to the move that works instead (karamazov-0e2c.18,
+ ;; after xi's interop-hint). jolt is Clojure without a JVM, and a model with
+ ;; JVM habits loses a turn to each of these unless the error says so. First
+ ;; match wins: a namespace the image cannot have before one it lacks.
+ [["(?i)Could not locate clojure/java/(shell|process)"
+   "The project image cannot start processes. Run commands with the `shell` tool."]
+  ["(?i)Could not locate (babashka|clojure/java/io)"
+   "jolt has no clojure.java.io or babashka here: use jolt.fs for files (jolt.fs/exists?, jolt.fs/list-dir), and slurp/spit."]
+  ["(?i)Could not locate .+ on the source roots"
+   "That namespace is not on the project's source paths: check the file exists under a :paths directory in deps.edn, and that its name matches its path (dashes in the ns name are underscores in the file)."]
+  ["(?i)Unknown class (\\S+)"
+   "jolt has no JVM classes beyond the ones it shims. If that name is a namespace alias, require it in this session first ((require '[the.ns :as alias])); for interop, use clojure.core, clojure.string or jolt.fs."]
+  ["(?i)Unable to resolve symbol"
+   "Each branch's eval session starts empty: require the namespace that defines it first, or use its fully qualified name."]
+  ["(?i)No matching (method|field|ctor)"
+   "jolt shims only part of each Java class. Prefer the clojure.core or clojure.string function that does the same thing."]]
+
+ :tool-error-classes
+ ;; What a failed tool result SAYS, mapped to what the branch should do about
+ ;; it (samizdat.agent.toolerr, ported from dirge tool_error_class.rs). The
+ ;; phrases are what this harness's own tools emit; a project whose tools speak
+ ;; differently retunes the classification here rather than in code.
+ ;;
+ ;; Order matters at the use site: fatal before transient before missing-info,
+ ;; because a permission refusal often also mentions a path.
+ {:fatal        #{"permission denied" "read-only file system" "operation not permitted"
+                  "no space left" "too many open files"}
+  :transient    #{"timed out" "timeout" "connection reset" "connection refused"
+                  "temporarily unavailable" "resource busy" "broken pipe"
+                  "try again"}
+  :missing-info #{"no such file" "does not exist" "no file " "not found"
+                  "no matches for" "unable to resolve symbol"
+                  "old_text not found" "outside the project root"}}
+
+ :completion-claim
+ ;; Phrases that assert WORK IS FINISHED. A memory carrying one is a claim
+ ;; about the tree, and the tree can be checked — which is what separates it
+ ;; from every other kind of memory the harness stores.
+ ;;
+ ;; Run cc88a760: the shared store held two of these from earlier FAILED runs
+ ;; ("messages.clj store is settled and verified end-to-end at the REPL",
+ ;; "tasks.clj store settled"). Both workers had eval-prototyped and written
+ ;; nothing — empty diffs — then recorded the claim as if done. A later worker
+ ;; recalled one at turn 3, concluded its part was already finished, and
+ ;; called done at turn 14 literally saying "I did not complete the change".
+ ;; The harness's own memory sabotaged the next run (karamazov-mjb).
+ #{"settled" "verified" "is done" "are done" "complete" "completed"
+   "finished" "working end-to-end" "end-to-end" "implemented" "landed"
+   "all tests pass" "suite is green" "shipped" "in place and working"}
+
+ :retry-safe-tools
+ ;; The tools re-running cannot duplicate an effect: pure reads. A POSITIVE
+ ;; allowlist, so a new tool is non-retryable until somebody argues otherwise
+ ;; — the safe answer is the one that should have to be argued against.
+ ;;
+ ;; `eval` and `shell` are deliberately absent even though many of their uses
+ ;; are reads: a timed-out shell may have run to completion, and nothing in the
+ ;; result can say which. That is the whole reason the gate is on the TOOL and
+ ;; not on the error.
+ #{"read_file" "read_digest" "grep" "lsp" "doc" "complete" "manual" "recall"
+   "fetch_turn" "fetch_artifact" "cells" "introspect"}
+
+ :skill-roots
+ ;; Project-relative directories a skill may live in, EARLIEST WINS. Two
+ ;; shapes are read from each: `<root>/<name>.md` (samizdat's flat form) and
+ ;; `<root>/<name>/SKILL.md` (a directory per skill plus its bundled
+ ;; resources — what Claude Code, pi, opencode, vis and the agents standard
+ ;; all write).
+ ;;
+ ;; A VECTOR, so order is precedence, and here rather than in src/ because
+ ;; which other harnesses' skills a project honours is a project's business.
+ ;; Discovery scanned only `.samizdat/skills/*.md`, which meant it could not
+ ;; read the skills checked into this very repository — including
+ ;; .agents/skills/beads/SKILL.md, the one AGENTS.md tells the agent to use
+ ;; (karamazov-15h). Adding a root costs nothing when the directory is
+ ;; absent: a missing root is skipped, never an error.
+ [".samizdat/skills"
+  ".agents/skills"
+  ".claude/skills"]
+ ;; --- the exam (karamazov-fgsb) ----------------------------------------------
+ ;;
+ ;; What marks a file as part of the exam, and what marks an assertion inside
+ ;; one. Both are conventions of the project being worked on rather than of
+ ;; this harness — a Clojure repo says test/ and _test.clj, a Python one says
+ ;; test_x.py, a JS one says .spec.ts — so both are vocabulary a project can
+ ;; retune without a rebuild.
+ ;;
+ ;; :assertion-forms counts ASSERTIONS and deliberately not `deftest`. A test
+ ;; moved between files loses no assertion, and counting the naming form made
+ ;; a helper extraction (run e1b765e7, flight.autopilot) read as a gutting —
+ ;; the false positive that wasted the first pass of the measurement behind
+ ;; gates.edn :exam-ratchet. Widening either list weakens the detector, which
+ ;; is the usual direction of drift for a gate the run being watched can edit.
+ :exam
+ {:test-paths ["(^|/)tests?/" "_test\\." "\\.spec\\." "(^|/)test_[^/]*\\.(clj|cljc|cljs|py|js|ts)$"]
+  :assertion-forms ["\\(is\\s" "\\(are\\s" "(?m)^\\s*assert\\s" "\\bexpect\\("]}
+}

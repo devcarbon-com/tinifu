@@ -1,0 +1,104 @@
+;; THE BEAM'S ROUND, as data.
+;;
+;; The inner turn is a manifest (`loop`, `critic`, `team`, …) and this is the
+;; outer one: the scheduler that advances every branch, decides which live,
+;; which fork, and when the run ends. It used to be a loop/recur inside
+;; samizdat.agent.beam, which meant the harness's own scheduling policy was the
+;; one thing a project could not change about itself.
+;;
+;; Each node is a cell in cells/beam.clj. The ORDER is the policy — see that
+;; file for what each ordering constraint is protecting — and editing this file
+;; is how a project changes it.
+;;
+;; Dispatch predicates are EDN forms evaluated at compile time. Keep them
+;; trivial readers of explicit keys: the cell computes the decision INTO the
+;; data map, the predicate only reads it.
+{:description "The beam scheduler: one round advances every active branch once, then scores, culls, settles, repopulates and spawns against the settled set. A barrier rather than a pipeline, because a branch deciding whether to fork needs the whole beam's last round rather than whenever its sibling happened to finish."
+
+ ;; NOT TURN-SLICEABLE. This manifest routes :tick back to :start and is
+ ;; non-iterating by the same test that refuses that shape elsewhere — it
+ ;; SCHEDULES the branches that make model calls rather than making one — so
+ ;; slicing it would cut the round's own back edge and produce a scheduler
+ ;; that runs one round. It was never in danger, because nothing calls
+ ;; turn-manifest on the scheduler; that is an invariant held by absence, and
+ ;; repl.edn is what it cost when a second manifest had the same shape and no
+ ;; such luck. Declared here so it is a property of the file rather than of
+ ;; which call site loads it (karamazov-4sx).
+ :turn-sliceable? false
+
+ :input-schema
+ ;; The SCHEDULER's entry, which is a different shape from every other
+ ;; manifest here: the round works over the whole beam, not one branch.
+ [:map [:branches :any] [:turn :int]]
+
+ :cells {:start      :beam/round-open
+         :directives :beam/directives
+         :advance    :beam/advance
+         :score      :beam/score
+         :cull       :beam/cull
+         :settle     :beam/settle
+         :repopulate :beam/repopulate
+         :escalate   :beam/escalate
+         :spawn      :beam/spawn
+         :tick       :beam/tick
+         :aborted    :beam/abort
+         :completed  :beam/complete
+         :exhausted  :beam/exhaust}
+
+ :edges {;; The top of every round decides whether the round happens.
+         :start      {:continue  :directives
+                      :aborted   :aborted
+                      :completed :completed
+                      :exhausted :exhausted}
+         ;; The round, in the order the cells' docstrings justify.
+         :directives :advance
+         :advance    :score
+         :score      :cull
+         :cull       :settle
+         :settle     :repopulate
+         :repopulate :escalate
+         :escalate   :spawn
+         :spawn      :tick
+         ;; The back edge: one round ends where the next begins.
+         :tick       :start
+         ;; The three endings.
+         :aborted    :end
+         :completed  :end
+         :exhausted  :end}
+
+ :dispatches {:start [[:aborted   {:verdict :aborted}]
+                      [:completed {:verdict :completed}]
+                      [:exhausted {:verdict :exhausted}]
+                      [:continue  _]]}
+
+ ;; EVERY ordering rule this round claims, and which of them the compiler
+ ;; catches. `:constraints` is DERIVED from the `:enforced true` entries, so
+ ;; the documented set and the checked set cannot drift apart — an editor can
+ ;; read this list and know exactly what is defended.
+ ;;
+ ;; An entry that is not enforced must say why, because "no constraint" and
+ ;; "no constraint yet" are different facts and only one of them is a decision.
+ :invariants
+ [{:type :must-follow :if :score :then :cull :enforced true
+   :protects "A branch's fate is decided on FRESH evidence. Retention reads
+              critic scores; stale ones decide a live branch's fate on last
+              round's evidence."}
+
+  {:type :must-follow :if :settle :then :repopulate :enforced true
+   :protects "A branch that stopped is written down before the beam refills
+              its slot — otherwise the record says a branch is running long
+              after something else took its place."}
+
+  {:type :must-precede :cell :directives :before :advance :enforced true
+   :protects "A human's instruction lands on a turn boundary. A branch
+              mid-turn is holding a ledger it read before the change, and
+              rewriting under it would make the two disagree for exactly one
+              turn."}
+
+  {:type :must-precede :cell :cull :before :spawn :enforced true
+   :protects "A branch culled this round must not also spend the branch
+              budget on children."}
+
+  {:type :must-precede :cell :escalate :before :spawn :enforced true
+   :protects "The theses a stuck run is handed are opened the same round:
+              :beam/spawn is what turns them into branches (karamazov-1wv9)."}]}

@@ -1,0 +1,52 @@
+;; A HIGH-LEVEL loop composed of sub-loops. This is the same behavior as the
+;; flat `critic` manifest, but authored hierarchically: the top level describes
+;; the overall loop, and the actual work and the finalization judge are nested
+;; sub-workflows (mycelium.compose wraps a whole manifest as one cell).
+;;
+;; :start runs the WORKER sub-loop (manifests/worker.edn) to a terminal verdict;
+;; a :done branch is handed to the CRITIC, which either ships it or sends it
+;; back to the worker to keep going; :abandoned/:exhausted finish directly.
+;; Select with config :run :loop "orchestrator".
+;;
+;; The critic's revise goes to :retry — the SAME worker sub-loop on a node of
+;; its own — never back to :start: the beam driver's turn slice redirects any
+;; edge returning to the entry node into :end, so a whole-run manifest that
+;; routes revise to :start has each cycle run as a separate turn with a fresh
+;; data map, and the critic's attempt counter resets every bounce (the same
+;; data loss the feature loop hit live, run 3b8d2af5).
+;;
+;; This is the structural basis for multi-agent work: once a worker is a
+;; composable sub-loop, a top level can run several of them — one per agent,
+;; each its own loop — coordinating through the shared workspace and mailbox.
+{:description "A hierarchical loop: a worker sub-loop composed with a finalization critic, authored as nested workflows. Same behavior as the flat critic loop, built from composable sub-loops — the pattern the feature loop generalizes."
+ :subworkflows {:loop/worker "worker"}
+
+ :input-schema
+ ;; What a driver hands this manifest to start a run. mycelium checks it in
+ ;; run-compiled BEFORE any cell runs, so a caller that builds the map wrongly
+ ;; is told which key, instead of a nil surfacing several cells later.
+ [:map [:branch :map] [:turn :int]]
+
+ :cells {:start  :loop/worker
+         :retry  :loop/worker
+         :critic :gate/critic
+         :finish :loop/finish}
+
+ :edges {:start  {:done      :critic
+                  :abandoned :finish
+                  :exhausted :finish}
+         :retry  {:done      :critic
+                  :abandoned :finish
+                  :exhausted :finish}
+         :critic {:ship   :finish
+                  :revise :retry}
+         :finish :end}
+
+ :dispatches {:start  [[:done      {:verdict :done}]
+                       [:abandoned {:verdict :abandoned}]
+                       [:exhausted {:verdict :exhausted}]]
+              :retry  [[:done      {:verdict :done}]
+                       [:abandoned {:verdict :abandoned}]
+                       [:exhausted {:verdict :exhausted}]]
+              :critic [[:ship   {:critic/decision :ship}]
+                       [:revise {:critic/decision :revise}]]}}

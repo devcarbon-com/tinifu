@@ -1,0 +1,129 @@
+;; The factory loop with a non-committing PROBE in front of the model call
+;; (LR-2). Identical to `loop` in every other respect, so the two are a
+;; controlled comparison: same cells, same routing, same constraints, one
+;; extra node.
+;;
+;; The probe asks "what would this branch do next?" against the branch's own
+;; tape, N candidate framings at a time, and throws every answer away except
+;; the steer it derives from the best one. It cannot run a tool — the inference
+;; step it drives has no tool seam — so a probe is inference spend and nothing
+;; else. It only fires when the branch has been producing unusable calls; see
+;; gates.edn :probe for the width and the trigger.
+;;
+;; Dispatch predicates are EDN forms evaluated at compile time. Keep them
+;; trivial readers of explicit keys: the cell computes the decision INTO the
+;; data map, the predicate only reads it.
+{:description "The factory loop plus a non-committing probe: before spending a turn on a branch that has been emitting unusable calls, try several framings of the next step against its own context and steer toward the one that produced a real tool call. Costs inference, never a turn."
+ :input-schema
+ ;; What a driver hands this manifest to start a run. mycelium checks it in
+ ;; run-compiled BEFORE any cell runs, so a caller that builds the map wrongly
+ ;; is told which key, instead of a nil surfacing several cells later.
+ [:map [:branch :map] [:turn :int]]
+
+ :cells {:start          :loop/assemble
+         ;; The context-budget ladder, as in every other turn manifest — a
+         ;; probe turn is a turn and pays the same context costs.
+         :measure        :compaction/measure
+         :cap            :compaction/cap
+         :prune          :compaction/prune
+         :fold           :compaction/fold
+         :probe          :probe/next-move
+         :ab             :probe/ab-model
+         :infer          :llm/infer
+         :parse          :llm/parse
+         :provider-error :loop/provider-error
+         :no-call        :loop/no-call
+         :dispatch       :tool/dispatch
+         :journal        :journal/record
+         :settle         :gate/settle
+         :arbiter        :gate/arbiter
+         :route          :loop/route
+         :distil         :memory/distil
+         :finish         :loop/finish}
+
+ :edges {:start          :probe
+         ;; The probe is a pass-through when it declines to fire, so there is
+         ;; no branch here: either it added a steer message or it did not, and
+         ;; the model call is next either way.
+         :probe          :ab
+         ;; The A/B arm is a pass-through until gates.edn :probe :variants
+         ;; names some models, which it does not by default. Wired anyway: a
+         ;; cell no manifest reaches is unreachable, so "the comparison is
+         ;; recorded" was an intention rather than a fact (RFC-002 F1).
+         :ab             :measure
+         :measure        {:cap  :cap
+                          :none :infer}
+         :cap            {:prune :prune
+                          :none  :infer}
+         :prune          :fold
+         :fold           :infer
+         :infer          :parse
+         :parse          {:provider-error :provider-error
+                          :no-call        :no-call
+                          :tool           :dispatch}
+         :provider-error :route
+         :no-call        :route
+         :dispatch       :journal
+         :journal        :settle
+         :settle         :arbiter
+         :arbiter        :route
+         ;; The back edge: one turn ends where the next begins.
+         ;; Every ending goes through :distil first, exactly as the factory
+         ;; loop does — this manifest is a controlled comparison, and a probe
+         ;; run that quietly stopped forming project memories would make it a
+         ;; comparison of two different things.
+         :route          {:continue  :start
+                          :done      :distil
+                          :abandoned :distil
+                          :exhausted :distil}
+         :distil         :finish
+         :finish         :end}
+
+ :dispatches {:measure [[:cap  {:compaction/route :cap}]
+                        [:none _]]
+              :cap     [[:prune {:compaction/route :prune}]
+                        [:none  _]]
+              ;; ORDER MATTERS here, as in loop.edn: a provider failure passes
+              ;; the data through with :parsed ABSENT, and a map pattern needs
+              ;; its key present, so :provider-error is tried first.
+              :parse [[:provider-error {:call {:ok false}}]
+                      [:no-call {:parsed nil}]
+                      [:no-call {:parsed {:name "__parse_error__"}}]
+                      [:tool _]]
+              :route [[:continue  {:verdict :continue}]
+                      [:done      {:verdict :done}]
+                      [:abandoned {:verdict :abandoned}]
+                      [:exhausted {:verdict :exhausted}]]}
+
+ ;; The same invariants the factory loop carries: a dispatched tool call is
+ ;; always journalled, and a journalled turn always faces the arbiter. The
+ ;; probe is deliberately NOT under a constraint — it is advisory, and a
+ ;; manifest that drops the node must stay legal.
+ ;; EVERY ordering rule this turn claims, and which of them the compiler
+ ;; catches. `:constraints` is DERIVED from the `:enforced true` entries
+ ;; (workflow/enforced-constraints), so the documented set and the checked set
+ ;; cannot drift apart. The turn-shaped manifests all carry the same four —
+ ;; they are the shape of a turn, not of this particular workflow.
+ :invariants
+ [{:type :must-follow :if :dispatch :then :journal :enforced true
+   :protects "A dispatched tool call is always recorded."}
+
+  {:type :must-follow :if :journal :then :arbiter :enforced true
+   :protects "A recorded turn always faces a gate."}
+
+  {:type :must-precede :cell :dispatch :before :arbiter :enforced true
+   :protects "The arbiter reads what the turn DID; a gate deciding before the
+              tool ran would steer on the previous turn's state."}
+
+  {:type :must-precede :cell :settle :before :arbiter :enforced true
+   :protects "A gate cannot be credited with an outcome that preceded it:
+              :gate/settle closes this turn's open predictions BEFORE the
+              arbiter chooses, so a resolution closes against the gate that
+              asked for it and not the one about to."}
+
+  {:type :must-precede :cell :parse :before :dispatch :enforced true
+   :protects "Nothing is dispatched that was not parsed out of a reply."}
+
+  {:type :must-precede :cell :distil :before :finish :enforced true
+   :protects "A task that ended wrote down what it learned about the project
+              before the branch closed."}]}

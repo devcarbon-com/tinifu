@@ -1,0 +1,102 @@
+;; The FEATURE loop: the high-level manifest. It tracks a feature through its
+;; lifecycle as a state machine and delegates each stage to a ROLE:
+;;
+;;   implement -> review -> critique -> verify -> supervise -> route
+;;        ^_________________________________________revise______|
+;;
+;;   implement  the BOARD by default (feature/board): a queue of owned tasks,
+;;              each claimed by ONE implementor, worked to a finish, and
+;;              reviewed by a critic on the diff that task produced before it
+;;              closes. A task that is really several is split by its owner at
+;;              claim time. The other rungs of the ladder are `team` (the
+;;              parallel fan-out — several owners in one tree at once) and
+;;              `decompose` (attempt, and split on stuck); the supervisor can
+;;              SWITCH between them mid-run and the ladder auto-advances.
+;;   plan       only in front of the FAN-OUT, which is the one strategy whose
+;;              parts have to exist before any worker starts (team/plan)
+;;   review     the REVIEWER role reads the round's combined work and returns
+;;              PASS / REVISE (feature/review runs reviewer.edn)
+;;   critique   the CRITIC role gates the result: deterministic checks + judge
+;;              (feature/critique). Together with review this is GATE 1: a diff
+;;              exists and it passed review.
+;;   verify     GATE 2 — run the tests (:run :verify-cmd); they must pass
+;;              (feature/verify). Both gates green = the task is done.
+;;   supervise  where the SUPERVISOR's directives about this loop land — a
+;;              `switch` of strategy, a per-owner `budget`, a `stop` — applied
+;;              to the next round. Not a supervisor itself: the one supervisor
+;;              is the stream beside the run (RFC-012). (feature/supervise)
+;;   route      keep solving by default — ship only real, verified work; send it
+;;              back to implement with the findings as guidance otherwise;
+;;              abandon (honestly unsolved) only in the extreme, when the
+;;              supervisor gives up or the :run :max-revisions backstop trips
+;;              (feature/route)
+;;
+;; The hierarchy is explicit: this manifest is the feature; each role has its
+;; own loop (implementor = worker.edn, reviewer.edn, critic = the judge) and its
+;; own prompt, and owns/tunes its own manifest. The supervisor is not a stage
+;; of it — it is oversight.edn, driven beside every run. Select with config
+;; :run :loop "feature". Pass config :run :subtasks with strategy `team` to skip
+;; planning.
+{:description "Build a feature end to end: a board of owned tasks (each implemented by one owner and reviewed on its own diff) -> review -> critique -> run the tests -> apply the supervisor stream's directives (switch / budget / stop) -> route. The default for a normal feature."
+ :input-schema
+ ;; :subtasks is optional and is what makes this a TEAM run: config
+ ;; :run :subtasks arrives pre-split, and :team/plan produces it otherwise.
+ ;; Malli maps are open, so the single-branch loops that ignore the key are
+ ;; unaffected by it being declared here.
+ [:map [:branch :map] [:turn :int]
+  [:subtasks {:optional true} [:sequential :string]]]
+
+ :cells {:start     :loop/assemble
+         :redispatch :feature/redispatch
+         :plan      :team/plan
+         :board     :feature/board
+         :fanout    :team/fan-out
+         :decompose :decompose/run
+         :review    :feature/review
+         :critique  :feature/critique
+         :verify    :feature/verify
+         :supervise :feature/supervise
+         :route     :feature/route
+         :finish    :loop/finish}
+
+ ;; The IMPLEMENT stage is switchable at runtime, on :implement-strategy —
+ ;; which the supervisor can set mid-run with a SWITCH: line when one approach
+ ;; keeps failing. A revise round returns to :start so the (possibly new)
+ ;; strategy is re-dispatched.
+ ;;
+ ;; Only the FAN-OUT needs the planner: the board's tasks come from the board
+ ;; (an owner splits its own task once it has read the code) and decompose does
+ ;; its own splitting on stuck. Routing the planner call in front of every
+ ;; strategy spent a provider call per round to produce a split two of the three
+ ;; then ignored.
+ :edges {:start     {:board :board :decompose :decompose :plan :plan}
+         :redispatch {:board :board :decompose :decompose :plan :plan}
+         :plan      :fanout
+         :board     :review
+         :fanout    :review
+         :decompose :review
+         :review    :critique
+         :critique  :verify
+         :verify    :supervise
+         :supervise :route
+         :route     {:ship   :finish
+                     ;; NEVER back to :start: the beam's turn slice cuts every
+                     ;; edge that returns to the entry node, so a revise round
+                     ;; would run as a fresh turn with a fresh data map — the
+                     ;; revision counter, the tried record and the guidance all
+                     ;; lost (run 3b8d2af5). :redispatch is the same dispatch
+                     ;; on a node of its own.
+                     :revise :redispatch}
+         :finish    :end}
+
+ ;; Membership is a guard, not a shape: {:k ?s} binds the strategy and
+ ;; [:in ?s #{...}] tests it, because a set inside a pattern matches as a
+ ;; literal.
+ :dispatches {:start [[:decompose {:implement-strategy "decompose"}]
+                      [:plan      {:implement-strategy ?s} [:in ?s #{"team" "fanout"}]]
+                      [:board     _]]
+              :redispatch [[:decompose {:implement-strategy "decompose"}]
+                           [:plan      {:implement-strategy ?s} [:in ?s #{"team" "fanout"}]]
+                           [:board     _]]
+              :route [[:ship   {:feature/decision :ship}]
+                      [:revise {:feature/decision :revise}]]}}

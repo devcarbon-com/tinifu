@@ -1,0 +1,24 @@
+;; The WORKER sub-loop: one branch doing the actual work, iterating a turn at a
+;; time until it reaches a terminal verdict. This is the turn chain
+;; (manifests/turn.edn, which it extends) with task reflection on every ending
+;; and no finish — a terminal verdict routes to :end, returning control (and
+;; the branch, carrying :verdict) to whatever composed this sub-loop. A
+;; top-level manifest runs it as a cell (mycelium.compose/workflow->cell) and
+;; decides what happens next — e.g. hand a :done branch to a critic before
+;; finishing. Running it standalone is the same as the flat loop up to the
+;; point it would finish.
+{:description "The worker sub-loop: one branch doing the actual per-turn work, returning its verdict to whatever composed it. Not usually run on its own — it is the implementor unit the team, feature, and decompose loops build on."
+ :extends "turn"
+
+ ;; Task reflection on every ending (blt.26): what this attempt owes the next
+ ;; one is distilled whether the worker runs standalone or composed — the
+ ;; parent decides finishing, not remembering.
+ :cells {:distil :memory/distil}
+
+ ;; :continue iterates; every terminal verdict returns to the parent, which
+ ;; reads :verdict to decide finishing vs critique.
+ :edges {:route  {:continue  :start
+                  :done      :distil
+                  :abandoned :distil
+                  :exhausted :distil}
+         :distil :end}}

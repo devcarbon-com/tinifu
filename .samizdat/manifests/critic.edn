@@ -1,0 +1,95 @@
+;; The critic loop: the factory loop with a finalization judge on the :done
+;; path. Select it with config :run :loop "critic" (HARNESS_LOOP=critic, or a
+;; project .samizdat/config.edn). Everything is the default loop except that a
+;; branch's :done routes through :gate/critic (cells/critic.clj) before it can
+;; finish: an LLM judge, fed a deterministic evidence block and the agent's own
+;; rules, either ships the answer or sends the branch back with one [critic]
+;; note. Bounded and fail-open, so it can never wedge a run.
+;;
+;; A project's first run copies this to .samizdat/manifests/critic.edn; after
+;; that the project's copy is what runs.
+;; The agent can tune it or fork a new manifest with the `manifest` tool.
+{:description "The worker loop with a finalization critic: on a done, a judge reviews the run's diff and either ships it or sends it back. Use when correctness matters more than speed and a single branch is enough."
+ :input-schema
+ ;; What a driver hands this manifest to start a run. mycelium checks it in
+ ;; run-compiled BEFORE any cell runs, so a caller that builds the map wrongly
+ ;; is told which key, instead of a nil surfacing several cells later.
+ [:map [:branch :map] [:turn :int]]
+
+ :cells {:start          :loop/assemble
+         :infer          :llm/infer
+         :parse          :llm/parse
+         :provider-error :loop/provider-error
+         :no-call        :loop/no-call
+         :dispatch       :tool/dispatch
+         :journal        :journal/record
+         :settle         :gate/settle
+         :arbiter        :gate/arbiter
+         :route          :loop/route
+         :critic         :gate/critic
+         ;; Task reflection on every ending, as the factory loop has (blt.26)
+         ;; — this manifest's header says "everything is the default loop
+         ;; except the critic", and dropping distil was the silent exception.
+         :distil         :memory/distil
+         :finish         :loop/finish}
+
+ :edges {:start          :infer
+         :infer          :parse
+         :parse          {:provider-error :provider-error
+                          :no-call        :no-call
+                          :tool           :dispatch}
+         :provider-error :route
+         :no-call        :route
+         :dispatch       :journal
+         :journal        :settle
+         :settle         :arbiter
+         :arbiter        :route
+         ;; A genuine done faces the critic first; everything else is unchanged.
+         :route          {:continue  :start
+                          :done      :critic
+                          :abandoned :distil
+                          :exhausted :distil}
+         ;; The critic either ships the done or sends the branch back to work.
+         :critic         {:ship   :distil
+                          :revise :start}
+         :distil         :finish
+         :finish         :end}
+
+ ;; ORDER MATTERS in :parse, as in loop.edn: a provider failure passes the
+ ;; data through with :parsed ABSENT, and a map pattern needs its key present,
+ ;; so :provider-error is tried first.
+ :dispatches {:parse [[:provider-error {:call {:ok false}}]
+                      [:no-call {:parsed nil}]
+                      [:no-call {:parsed {:name "__parse_error__"}}]
+                      [:tool _]]
+              :route [[:continue  {:verdict :continue}]
+                      [:done      {:verdict :done}]
+                      [:abandoned {:verdict :abandoned}]
+                      [:exhausted {:verdict :exhausted}]]
+              :critic [[:ship   {:critic/decision :ship}]
+                       [:revise {:critic/decision :revise}]]}
+
+ ;; EVERY ordering rule this turn claims, and which of them the compiler
+ ;; catches. `:constraints` is DERIVED from the `:enforced true` entries
+ ;; (workflow/enforced-constraints), so the documented set and the checked set
+ ;; cannot drift apart. The turn-shaped manifests all carry the same four —
+ ;; they are the shape of a turn, not of this particular workflow.
+ :invariants
+ [{:type :must-follow :if :dispatch :then :journal :enforced true
+   :protects "A dispatched tool call is always recorded."}
+
+  {:type :must-follow :if :journal :then :arbiter :enforced true
+   :protects "A recorded turn always faces a gate."}
+
+  {:type :must-precede :cell :dispatch :before :arbiter :enforced true
+   :protects "The arbiter reads what the turn DID; a gate deciding before the
+              tool ran would steer on the previous turn's state."}
+
+  {:type :must-precede :cell :settle :before :arbiter :enforced true
+   :protects "A gate cannot be credited with an outcome that preceded it:
+              :gate/settle closes this turn's open predictions BEFORE the
+              arbiter chooses, so a resolution closes against the gate that
+              asked for it and not the one about to."}
+
+  {:type :must-precede :cell :parse :before :dispatch :enforced true
+   :protects "Nothing is dispatched that was not parsed out of a reply."}]}

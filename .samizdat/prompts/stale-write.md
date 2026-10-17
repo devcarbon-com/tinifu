@@ -1,0 +1,1 @@
+Note: {{branch}} changed `{{path}}` ({{tool}}) since you last read it. Your write went through, so if you wrote the whole file from memory you may have just dropped their work. Read it back before you go on.

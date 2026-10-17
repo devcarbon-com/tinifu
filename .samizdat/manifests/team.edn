@@ -1,0 +1,34 @@
+;; A multi-agent TEAM workflow: split the feature, fan out a worker per part,
+;; join the answers. Select with config :run :loop "team". You may pass an
+;; explicit config :run :subtasks ["part A" "part B" …]; otherwise :team/plan
+;; splits the problem into at most :run :max-subtasks parts with one LLM call.
+;; :team/fan-out (cells/team.clj) then runs one worker sub-loop per part in
+;; parallel, each its own branch on the shared run so they coordinate through
+;; the mailbox. :team/supervise re-tasks any part that did not land (gave up,
+;; hit the turn cap, crashed) with one more run, then the answers join into the
+;; manager branch. A problem the planner (or you) leaves as one part degenerates
+;; to a single worker.
+;;
+;; This is the first, dataflow, slice of the multi-agent work (hc7): workers
+;; run to completion and coordinate between-turn via the mailbox. Live per-turn
+;; steering (the actor model) is a later step.
+{:description "A team: split the problem into parts and fan out one implementor per part in parallel, coordinating through a shared working tree, a mailbox, and a per-turn view of which files the others have changed, then join and re-task any part that didn't land. Good when a feature has several parts one agent each can own."
+ :input-schema
+ ;; :subtasks is optional and is what makes this a TEAM run: config
+ ;; :run :subtasks arrives pre-split, and :team/plan produces it otherwise.
+ ;; Malli maps are open, so the single-branch loops that ignore the key are
+ ;; unaffected by it being declared here.
+ [:map [:branch :map] [:turn :int]
+  [:subtasks {:optional true} [:sequential :string]]]
+
+ :cells {:start      :loop/assemble
+         :plan       :team/plan
+         :team       :team/fan-out
+         :supervise  :team/supervise
+         :finish     :loop/finish}
+
+ :edges {:start      :plan
+         :plan       :team
+         :team       :supervise
+         :supervise  :finish
+         :finish     :end}}

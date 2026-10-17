@@ -1,0 +1,1 @@
+{{workflow}} — {% if runs %}shipped {{shipped}} of {{runs}} run{% if plural %}s{% endif %} on this project{% else %}no finished run on this project{% endif %}{% if errors %} ({{errors}} crashed){% endif %}

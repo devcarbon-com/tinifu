@@ -1,0 +1,32 @@
+;; PROMPT CHAINS — which text a prompt layer resolves to, as data.
+;;
+;; Ported from llm-repl's preamble chain (roster/resolve-preamble), whose rule
+;; is FIRST-PRESENT-WINS: a level REPLACES the text, never concatenates it. An
+;; absent level inherits from the one below; a level that is present but blank
+;; means "explicitly none" and stops the walk.
+;;
+;; That is the semantics samizdat was missing. A project could add to the
+;; system prompt (a manifest's :prompt is appended, deliberately, so a
+;; specialised workflow keeps the whole documented tool surface) but had no way
+;; to REPLACE it or to suppress it — the shipped prompt was the floor whatever
+;; the project was.
+;;
+;; Entry kinds, and what makes each "present":
+;;
+;;   {:project "path"}  a file relative to the working directory — the project
+;;                      being worked on. Present when the file exists. Blank
+;;                      content means explicitly none. Same override
+;;                      convention as .samizdat/cells.
+;;   {:file "name"}     resources/prompts/name.md, through io/resource, so it
+;;                      works inside a built binary. Present when it resolves.
+;;   {:text "..."}      a literal. Present unless blank.
+;;
+;; Editing this file changes which text the harness boots with, at runtime,
+;; with no rebuild.
+{;; The base system prompt. A project drops its own system.md in
+ ;; .samizdat/prompts/ to replace the shipped one outright — for a codebase
+ ;; whose conventions are nothing like the ones system.md teaches — or leaves
+ ;; that file empty to boot with no base prompt at all and let a workflow's
+ ;; own :prompt be the whole instruction set.
+ :system [{:project ".samizdat/prompts/system.md"}
+          {:file "system"}]}

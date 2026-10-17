@@ -1,0 +1,23 @@
+;; The REVIEWER role loop. Structurally the per-turn worker graph — the turn
+;; chain (manifests/turn.edn, which it extends) with task reflection on every
+;; ending — because a reviewer works the same way an implementor does: a turn
+;; at a time until a terminal verdict, then control returns to whatever
+;; composed it. What makes it the REVIEWER is its role prompt
+;; (prompts/roles/reviewer.md, injected by :feature/review) and its position in
+;; feature.edn (it runs on the implementors' finished work).
+;;
+;; It is a SEPARATE, independently-versioned manifest from `worker` on purpose:
+;; the reviewer role owns this loop and can tune it (manifest save "reviewer")
+;; without touching how implementors work. Today it mirrors `worker`; it is free
+;; to diverge.
+{:description "The reviewer role loop: reads the implementors' finished work and returns PASS or REVISE. A component of the feature loop, not usually run standalone."
+ :extends "turn"
+
+ ;; Task reflection on every ending (blt.26).
+ :cells {:distil :memory/distil}
+
+ :edges {:route  {:continue  :start
+                  :done      :distil
+                  :abandoned :distil
+                  :exhausted :distil}
+         :distil :end}}

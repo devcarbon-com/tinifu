@@ -1,0 +1,88 @@
+;; The BOARD loop: a queue of OWNED tasks, each worked to a finish by one
+;; implementor and reviewed on its own diff before it closes.
+;;
+;;   plan   -> ensure there is work: the run's problem becomes one task if the
+;;             board is empty. No planner call — a task that is really several
+;;             is split by its OWNER at claim time, once it has read the code.
+;;   next   -> claim the next workable task (a leaf, oldest first) to a fresh
+;;             branch and stamp a git baseline for it
+;;   work   -> that owner runs the implementor loop until it finishes or gives up
+;;   review -> a critic reads the diff THAT TASK produced: close it, send it
+;;             back to the same owner with findings, or leave it open
+;;   back to next until the board is clear
+;;
+;; This replaces the fan-out (team.edn) as the default way several agents share
+;; a feature. Same collaboration — one tree, one board, the mailbox — without
+;; several agents editing it at once with no owner for any of it. Select with
+;; config :run :loop "board".
+{:description "Work a board of owned tasks one at a time: claim a task, implement it, have a critic review the diff that task produced, close it, take the next. A task that is really several is split by its owner. The default for feature work — clear ownership, review per change."
+ :input-schema
+ ;; What a driver hands this manifest to start a run. mycelium checks it in
+ ;; run-compiled BEFORE any cell runs, so a caller that builds the map wrongly
+ ;; is told which key, instead of a nil surfacing several cells later.
+ [:map [:branch :map] [:turn :int]]
+
+ :cells {:start   :board/plan
+         :next    :board/next
+         ;; THE PLAN PHASE (karamazov-vale), between claiming a task and
+         ;; building it — the one place the implementer had no gate. triage
+         ;; decides plan-or-skip cheaply; design produces an implementation
+         ;; plan; design-review is the plan critic; approve is the human gate
+         ;; when attended and the critic alone when not.
+         :triage  :board/triage
+         :design  :board/design
+         :dcritic :board/design-review
+         :approve :board/approve
+         :decompose :board/decompose
+         :epic-review :board/epic-review
+         :work    :board/work
+         :review  :board/review
+         :finish  :board/finish}
+
+ :edges {:start  :next
+         :next   {:task        :triage
+                  :epic-review :epic-review
+                  :empty       :finish}
+         :epic-review :next
+         :triage {:plan :design
+                  :rfc  :design
+                  :skip :work}
+         :design :dcritic
+         :dcritic {:ok     :approve
+                   :revise :design}
+         :approve {:go        :work
+                   :decompose :decompose
+                   :rework    :design}
+         :decompose {:decomposed :next
+                     :single     :work}
+         :work   :review
+         :review {:pass    :next
+                  :revise  :work
+                  :give-up :next}
+         :finish :end}
+
+ :dispatches {:next    [[:task        {:board/verdict :task}]
+                       [:epic-review {:board/verdict :epic-review}]
+                       [:empty _]]
+              :triage  [[:plan {:board/plan-decision :plan}]
+                        [:rfc  {:board/plan-decision :rfc}]
+                        [:skip _]]
+              :dcritic [[:revise {:board/design-decision :revise}]
+                        [:ok     _]]
+              :approve [[:rework    {:board/approve-decision :rework}]
+                        [:decompose {:board/approve-decision :decompose}]
+                        [:go        _]]
+              :decompose [[:decomposed {:board/decompose-decision :decomposed}]
+                          [:single     _]]
+              :review  [[:pass    {:board/decision :pass}]
+                       [:revise  {:board/decision :revise}]
+                       [:give-up _]]}
+
+ :invariants
+ [{:type :must-follow :if :work :then :review :enforced true
+   :protects "Nothing a task changed reaches the board as done without a critic
+              having read that change."}
+
+  {:type :must-precede :cell :next :before :work :enforced true
+   :protects "Work is only ever done under a claimed task, so every change has
+              an owner on the board."}]}

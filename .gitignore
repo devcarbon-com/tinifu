@@ -1,0 +1,8 @@
+.cpcache/
+.jolt/
+.lsp/
+.clj-kondo/.cache/
+needle/
+voice-input/
+vendor/
+.dirge/

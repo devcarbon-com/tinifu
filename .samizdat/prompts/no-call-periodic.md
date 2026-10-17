@@ -1,0 +1,1 @@
+[harness] Your response repeated the same passage {{repeats}} times and never reached a tool call. That is a loop, not progress, and more room would only make it longer. Do not continue that text. Start your next response with the tool call — one line of reasoning at most, then the fenced block.

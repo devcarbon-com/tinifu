@@ -1,0 +1,83 @@
+;; A review workflow. The cells are the ordinary loop, but :prompt injects
+;; review guidance at the start (resources/prompts/review.md, appended to the
+;; base system prompt), so the same graph does a code review instead of
+;; building a feature — the manifest declares the ROLE. Select with
+;; config :run :loop "review". This is the pattern for task-shaped workflows:
+;; a manifest is a loop plus the prompt that frames what the loop is for.
+{:description "A review workflow: the base loop with review guidance injected at the start, so the run reviews existing work rather than building new. Use to audit or review a change, not to implement one."
+ :prompt "review"
+
+ :input-schema
+ ;; What a driver hands this manifest to start a run. mycelium checks it in
+ ;; run-compiled BEFORE any cell runs, so a caller that builds the map wrongly
+ ;; is told which key, instead of a nil surfacing several cells later.
+ [:map [:branch :map] [:turn :int]]
+
+ :cells {:start          :loop/assemble
+         :infer          :llm/infer
+         :parse          :llm/parse
+         :provider-error :loop/provider-error
+         :no-call        :loop/no-call
+         :dispatch       :tool/dispatch
+         :journal        :journal/record
+         :settle         :gate/settle
+         :arbiter        :gate/arbiter
+         :route          :loop/route
+         ;; Task reflection on every ending, as the factory loop has (blt.26).
+         :distil         :memory/distil
+         :finish         :loop/finish}
+
+ :edges {:start          :infer
+         :infer          :parse
+         :parse          {:provider-error :provider-error
+                          :no-call        :no-call
+                          :tool           :dispatch}
+         :provider-error :route
+         :no-call        :route
+         :dispatch       :journal
+         :journal        :settle
+         :settle         :arbiter
+         :arbiter        :route
+         :route          {:continue  :start
+                          :done      :distil
+                          :abandoned :distil
+                          :exhausted :distil}
+         :distil         :finish
+         :finish         :end}
+
+ ;; ORDER MATTERS in :parse, as in loop.edn: a provider failure passes the
+ ;; data through with :parsed ABSENT, and a map pattern needs its key present,
+ ;; so :provider-error is tried first.
+ :dispatches {:parse [[:provider-error {:call {:ok false}}]
+                      [:no-call {:parsed nil}]
+                      [:no-call {:parsed {:name "__parse_error__"}}]
+                      [:tool _]]
+              :route [[:continue  {:verdict :continue}]
+                      [:done      {:verdict :done}]
+                      [:abandoned {:verdict :abandoned}]
+                      [:exhausted {:verdict :exhausted}]]}
+
+ ;; EVERY ordering rule this turn claims, and which of them the compiler
+ ;; catches. `:constraints` is DERIVED from the `:enforced true` entries
+ ;; (workflow/enforced-constraints), so the documented set and the checked set
+ ;; cannot drift apart. The turn-shaped manifests all carry the same four —
+ ;; they are the shape of a turn, not of this particular workflow.
+ :invariants
+ [{:type :must-follow :if :dispatch :then :journal :enforced true
+   :protects "A dispatched tool call is always recorded."}
+
+  {:type :must-follow :if :journal :then :arbiter :enforced true
+   :protects "A recorded turn always faces a gate."}
+
+  {:type :must-precede :cell :dispatch :before :arbiter :enforced true
+   :protects "The arbiter reads what the turn DID; a gate deciding before the
+              tool ran would steer on the previous turn's state."}
+
+  {:type :must-precede :cell :settle :before :arbiter :enforced true
+   :protects "A gate cannot be credited with an outcome that preceded it:
+              :gate/settle closes this turn's open predictions BEFORE the
+              arbiter chooses, so a resolution closes against the gate that
+              asked for it and not the one about to."}
+
+  {:type :must-precede :cell :parse :before :dispatch :enforced true
+   :protects "Nothing is dispatched that was not parsed out of a reply."}]}

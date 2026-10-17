@@ -1,0 +1,146 @@
+;; Global user config for Samizdat.
+;; Providers are aliases assigned to roles; each selected provider must name a
+;; built-in adapter type. API keys remain in environment variables.
+
+{:providers
+ {:inferx-qwen3.6-35b-a3b-fp8
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "Qwen3.6-35B-A3B-FP8"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 262000}
+
+  :inferx-qwen3.6-35b-a3b-fp8-no-thinking
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "Qwen3.6-35B-A3B-fp8-no-thinking"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 32000}
+
+  :inferx-qwen3-coder-next
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "Qwen3-Coder-Next-FP8"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 256144}
+
+  :inferx-glm-5.3-flash
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "glm-5.3-flash"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 262144
+   :reasoning-effort "low"}
+
+  :inferx-muse-glimmer
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "muse-glimmer"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 131072}
+
+  :inferx-nemotron-35-lightning
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "nemotron-35-lightning"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 262144}
+
+  :inferx-agents-a1
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "Agents-A1"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 262000}
+
+  :inferx-devstral-2
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "Devstral-2-123B-Instruct-2512-int4-AutoRound"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 128000}
+
+  :inferx-ornith-1.0
+  {:type :openai
+   :base-url "https://model.inferx.net/endpoints/v1"
+   :model "Ornith-1.0-35B-FP8"
+   :api-key-env "INFERX_API_KEY"
+   :context-window 262000}
+
+  :ollama
+  {:type :ollama
+   :base-url "http://127.0.0.1:11434"
+   :model "qwen3"
+   :context-window 32768}
+
+  :ollama-kimi-k2.7-code
+  {:type :openai
+   :base-url "https://ollama.com/v1"
+   :api-key-env "OLLAMA_API_KEY"
+   :model "kimi-k2.7-code"}
+
+  :ollama-deepseek-v4-pro
+  {:type :openai
+   :base-url "https://ollama.com/v1"
+   :api-key-env "OLLAMA_API_KEY"
+   :model "deepseek-v4-pro"}
+
+  :ollama-deepseek-v4-flash
+  {:type :openai
+   :base-url "https://ollama.com/v1"
+   :api-key-env "OLLAMA_API_KEY"
+   :model "deepseek-v4-flash"}
+
+  :ollama-gpt-oss-20b
+  {:type :openai
+   :base-url "https://ollama.com/v1"
+   :api-key-env "OLLAMA_API_KEY"
+   :model "gpt-oss:20b"}
+
+  :ollama-gpt-oss-120b
+  {:type :openai
+   :base-url "https://ollama.com/v1"
+   :api-key-env "OLLAMA_API_KEY"
+   :model "gpt-oss:120b"}
+
+  :ollama-glm-5.2
+  {:type :openai
+   :base-url "https://ollama.com/v1"
+   :api-key-env "OLLAMA_API_KEY"
+   :model "glm-5.2"}
+
+  :local
+  {:type :local
+   :base-url "http://127.0.0.1:8080/v1"
+   :model "local-model"
+   :context-window 32768}
+
+  :deepseek-v4-flash
+  {:type :deepseek
+   :base-url "https://api.deepseek.com/beta"
+   :model "deepseek-v4-flash"
+   :api-key-env "DEEPSEEK_API_KEY"
+   :context-window 128000}
+
+  :deepseek-v4-pro
+  {:type :deepseek
+   :base-url "https://api.deepseek.com/beta"
+   :model "deepseek-v4-pro"
+   :api-key-env "DEEPSEEK_API_KEY"
+   :context-window 128000}
+
+  :openai
+  {:type :openai
+   :base-url "https://api.openai.com/v1"
+   :model "gpt-4o"
+   :api-key-env "OPENAI_API_KEY"
+   :context-window 128000}
+
+  :glm
+  {:type :glm
+   :base-url "https://open.bigmodel.cn/api/coding/paas/v4"
+   :model "glm-5.3"
+   :api-key-env "ZHIPU_API_KEY"
+   :context-window 128000
+   :temperature 0.2}}
+ :roles {:default :inferx-glm-5.3-flash}}

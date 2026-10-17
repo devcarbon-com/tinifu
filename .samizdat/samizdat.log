@@ -1,0 +1,60 @@
+INFO samizdat.system - provider :openai features: native-tool-choice reasoning-effort stream
+INFO samizdat.system - config global read /home/pacman/.config/samizdat/config.edn
+INFO samizdat.system - config project absent /home/pacman/projects/tinifu/.samizdat/config.edn
+INFO samizdat.userspace - userspace: seeded 253 file(s) into /home/pacman/projects/tinifu/.samizdat 
+INFO samizdat.system - loaded 63 cell(s) for /home/pacman/projects/tinifu
+INFO samizdat.system - provider :openai features: native-tool-choice reasoning-effort stream
+INFO samizdat.system - config global read /home/pacman/.config/samizdat/config.edn
+INFO samizdat.system - config project read /home/pacman/projects/tinifu/.samizdat/config.edn
+INFO samizdat.system - loaded 63 cell(s) for /home/pacman/projects/tinifu
+INFO samizdat.system - provider :openai features: native-tool-choice reasoning-effort stream
+INFO samizdat.system - config global read /home/pacman/.config/samizdat/config.edn
+INFO samizdat.system - config project read /home/pacman/projects/tinifu/.samizdat/config.edn
+INFO samizdat.system - loaded 63 cell(s) for /home/pacman/projects/tinifu
+INFO samizdat.system - samizdat up on port 3985 provider :openai model glm-5.3-flash db /home/pacman/projects/tinifu/.samizdat/samizdat.sqlite3
+INFO samizdat.core - provider :openai reachable, glm-5.3-flash available
+WARN samizdat.core - nREPL not started: on this host the agent's shell can reach loopback, and the nREPL asks for no credentials. config.edn :nrepl {:unconfined :allow} starts it anyway.
+INFO samizdat.repl - the harness image's eval can now reach /home/pacman/projects/tinifu/src, /home/pacman/projects/tinifu/test
+INFO samizdat.agent.oversight - watch: raised :tool-failing - `shell` fails more often than it works
+INFO samizdat.agent.oversight - watch: raised :steering-ignored - the branch is not responding to steering AT ALL — 5 gate firings across the run and 0 of them got what they asked for. More nagging will not help; the loop itself, or the model, is the thing to change
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2263 ms: transport: Connection reset
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2089 ms: transport: connection closed during TLS handshake
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2302 ms: transport: Broken pipe
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2409 ms: transport: Broken pipe
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2389 ms: transport: Broken pipe
+WARN samizdat.llm.client - OpenAI attempt 2 failed, retrying in 9482 ms: transport: connection closed during TLS handshake
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2086 ms: transport: Connection reset
+WARN samizdat.llm.client - OpenAI attempt 2 failed, retrying in 8118 ms: transport: Broken pipe
+WARN samizdat.llm.client - OpenAI attempt 2 failed, retrying in 9285 ms: transport: Broken pipe
+WARN samizdat.agent.loop - branch B4 turn 37 model call failed: OpenAI call failed: transport: connect timed out: model.inferx.net:443
+WARN samizdat.agent.loop - branch B5 turn 37 model call failed: OpenAI call failed: transport: connection closed during TLS handshake
+WARN samizdat.agent.loop - branch B2 turn 37 model call failed: OpenAI call failed: transport: Connection reset
+WARN samizdat.llm.client - OpenAI attempt 2 failed, retrying in 9730 ms: transport: Broken pipe
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2016 ms: transport: Connection reset
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2407 ms: transport: Connection reset
+INFO samizdat.api.control - run aborted: Dataflow variable dereference cancelled.
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2314 ms: transport: connection closed during TLS handshake
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2438 ms: transport: connection closed during TLS handshake
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2034 ms: transport: connect timed out: model.inferx.net:443
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2071 ms: transport: connect timed out: model.inferx.net:443
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2079 ms: transport: connect timed out: model.inferx.net:443
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2245 ms: transport: connect timed out: model.inferx.net:443
+WARN samizdat.llm.client - OpenAI attempt 1 failed, retrying in 2015 ms: transport: connect timed out: model.inferx.net:443
+INFO samizdat.api.control - resume aborted: Dataflow variable dereference cancelled.
+INFO samizdat.agent.oversight - watch: raised :shipping-unverified - the ship gate is being asked and cannot answer — work is shipping without its tests having been run
+INFO samizdat.agent.beam - distilled 1 finding(s) and 0 verdict(s) into memory
+INFO samizdat.api.control - run aborted: Dataflow variable dereference cancelled.
+INFO samizdat.system - provider :openai features: native-tool-choice reasoning-effort stream
+INFO samizdat.system - config global read /home/pacman/.config/samizdat/config.edn
+INFO samizdat.system - config project read /home/pacman/projects/tinifu/.samizdat/config.edn
+INFO samizdat.system - loaded 63 cell(s) for /home/pacman/projects/tinifu
+INFO samizdat.system - samizdat up on port 3985 provider :openai model glm-5.3-flash db /home/pacman/projects/tinifu/.samizdat/samizdat.sqlite3
+INFO samizdat.core - provider :openai reachable, glm-5.3-flash available
+WARN samizdat.core - nREPL not started: on this host the agent's shell can reach loopback, and the nREPL asks for no credentials. config.edn :nrepl {:unconfined :allow} starts it anyway.
+INFO samizdat.repl - the harness image's eval can now reach /home/pacman/projects/tinifu/src, /home/pacman/projects/tinifu/test
+INFO samizdat.agent.beam - loop team is a whole-run workflow; beam width forced to 1 (asked for 5)
+INFO samizdat.api.control - run aborted: Dataflow variable dereference cancelled.
+WARN samizdat.sandbox.sci - oversight :reason failed: Process cancelled.
+WARN samizdat.agent.oversight - oversight pass failed: Process cancelled.
+INFO samizdat.agent.beam - distilled 1 finding(s) and 0 verdict(s) into memory
+INFO samizdat.agent.beam - distilled 2 finding(s) and 0 verdict(s) into memory

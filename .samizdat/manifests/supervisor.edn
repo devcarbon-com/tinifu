@@ -1,0 +1,16 @@
+;; The SUPERVISOR role loop — the harness's introspection agent. Structurally
+;; the turn chain itself (manifests/turn.edn, which it extends with nothing),
+;; because the supervisor works the same way every role does: a turn at a time
+;; until it decides, then every terminal verdict returns to the oversight cell.
+;; What makes it the SUPERVISOR is its role prompt (prompts/roles/supervisor.md,
+;; injected by :oversight/reason) and that it is handed a run-health digest to
+;; introspect on rather than a part to build. It has the FULL tool surface on
+;; purpose — it must be able to read the journal and transcripts to diagnose,
+;; and edit manifests / cells / prompts (the mutation protocol, which validates
+;; every change) to tune the harness.
+;;
+;; A separate, independently-versioned manifest so the supervisor role owns and
+;; can tune its own loop (manifest save "supervisor") without changing the turn
+;; every other role runs.
+{:description "The supervisor role loop: the harness's introspection agent, handed a run-health digest to diagnose and steer from. A component of the feature loop, not usually run standalone."
+ :extends "turn"}

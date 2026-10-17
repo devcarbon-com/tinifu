@@ -1,0 +1,254 @@
+;; samizdat - a self-hosting agentic harness
+;; SPDX-License-Identifier: GPL-3.0-or-later
+;;
+;; The branch phase machine, result transitions, and winner rubric as data
+;; (drg-4026 #3/#30/#34 — audit findings 3, 30, 34). Loaded by
+;; src/samizdat/agent/phases.clj, the wordlists precedent: state.clj sits
+;; below gates.clj in the require graph, so state-level workflow data gets
+;; its own loader rather than reading gates' accessor. Structure compiles
+;; once at load where forms are involved (the rubric); tables are read at
+;; fire time. Every section's WHY lives here beside the data.
+
+{:initial-phase :explore
+
+ ;; #34: the explore/build machine. A phase with a :cap-key is capped: past
+ ;; the gates.edn threshold it names, the branch advances to :next and the
+ ;; valve tells the model why (prompts/explore-cap.md). The cap VALUE stays a
+ ;; gates.edn scalar the loop passes in — this table names which phase is
+ ;; capped and what comes next, not how long it lasts.
+ ;;
+ ;; :withholds is the per-phase tool policy base/phase-refusal consults.
+ ;; Empty: the proof harness's withheld tools left with its engines, and the
+ ;; coding loop has no PHASE-locked tools. The refusals table below is the
+ ;; one that is populated, because the rule that was missing turned on the
+ ;; branch rather than on its phase. Both paths carry :policy-refusal? true
+ ;; so a cull record can tell a declined call from a malformed fence.
+ :phases {:explore {:cap-key :explore-cap :next :build :withholds #{}}
+          :build {:withholds #{}}}
+
+ ;; CONDITIONAL withholds: a refusal that depends on the BRANCH rather than
+ ;; on its phase. :withholds above can only ask "which tools does this phase
+ ;; forbid"; this table can ask anything about the branch, because a :when
+ ;; form sees `branch` and `tool-name` as locals. Ordered, first match wins,
+ ;; compiled once at load (a broken form fails there, not mid-run) while
+ ;; everything the form reads is read at fire time.
+ ;;
+ ;; WHY THE FIRST ENTRY EXISTS. RFC-008 recorded that the task board was
+ ;; "encouraged, not enforced": the per-turn context block says "No task
+ ;; claimed" and the system prompt says work starts with a task, but nothing
+ ;; refused a tool call from a branch holding none. Encouragement is not a
+ ;; property — a model under pressure skips it exactly when the board would
+ ;; have mattered most, and the board's whole purpose is arbitrating between
+ ;; branches that are about to collide.
+ ;;
+ ;; WHICH TOOLS, and the three things this set is deliberately NOT.
+ ;;
+ ;; What the board arbitrates is who is CHANGING WHAT. On a team workflow the
+ ;; competing implementors are branches of one run sharing one working tree,
+ ;; and two of them editing the same file is the collision the board exists to
+ ;; prevent. So the rule gates the two tools that mutate that tree, and
+ ;; nothing else.
+ ;;
+ ;; NOT the investigating tools. `read_file`, `grep`, `lsp`, `shell` and
+ ;; `eval` are how a branch finds out what needs doing — and a branch has to
+ ;; be able to do that BEFORE it can know what to claim. A refusal on
+ ;; `read_file` is a deadlock wearing a policy's clothes. `task` itself is
+ ;; never withheld, for the same reason.
+ ;;
+ ;; NOT `done` or `give_up`. Refusing to let a branch FINISH because it never
+ ;; claimed a task discards completed work to enforce bookkeeping, which is
+ ;; the worst available trade: the work exists, the answer is in hand, and the
+ ;; harness would be throwing it away over a missing row. Ending a run is also
+ ;; where a bad refusal is least recoverable — there is no next turn to fix it
+ ;; in. Every scripted end-to-end run drives `thesis` then `done`, and when
+ ;; `done` was briefly in this set all of them failed; that was the mechanism
+ ;; reporting a real design error, not a test fixture problem.
+ ;;
+ ;; NOT `eval`, specifically, on top of the above: the mutation protocol is
+ ;; built on in-process eval (RFC-002), so withholding it would make the
+ ;; harness's ability to modify itself depend on the task board.
+ ;;
+ ;; TO TURN IT OFF, set :tools to #{}. It is data, and a project that does not
+ ;; want a board should not have to carry one.
+ :refusals
+ [;; A PLANNING BRANCH DECLARES; IT DOES NOT BUILD OR SHIP. The board's design
+  ;; step tags its branch :planning? (state/planning?) because its whole
+  ;; product is the `plan` call, which ends it. Before this rule the same
+  ;; branch was steered exactly like a builder: told to land files it was
+  ;; briefed not to write, and forced to a `done` in its last turns that the
+  ;; nothing-changed rung then refused — an RFC is not a diff. The refusal
+  ;; here says the one thing that is true of the branch: call plan. First in
+  ;; the table because it is the sharpest reason; a design branch holds a
+  ;; task, so :work-needs-a-task would not have caught it anyway
+  ;; (karamazov-ee72). `give_up` stays open — a branch that cannot plan must
+  ;; still be able to say so.
+  {:rule :planning-declares-a-plan
+   :when (samizdat.agent.state/planning? branch)
+   :tools #{"done" "write_file" "edit_file"}
+   :message-file "planning-declares-a-plan"}
+
+  {:rule :work-needs-a-task
+   :when (nil? (:task branch))
+   :tools #{"write_file" "edit_file"}
+   :message-file "task-required"}
+
+  ;; The storm guard (karamazov-ekk): withhold the identical repeat and the
+  ;; A-B-A-B extension. Detection is samizdat.agent.storm (pure); thresholds
+  ;; and tool classification are gates.edn (:storm-* thresholds, :storm-exempt
+  ;; / :storm-mutating vocabularies); this table is only the DECISION that a
+  ;; detected storm is withheld — remove a rule and the guard is advisory-off
+  ;; for that shape, no rebuild. Ordered after the task rule so a task-less
+  ;; repeated write is refused for the sharper reason. :tools :all because
+  ;; exemption is the policy's business (the :storm-exempt vocabulary), not a
+  ;; second list here to drift.
+  {:rule :storm
+   :when (samizdat.agent.storm/repeat-blocked?
+          ctx (samizdat.agent.gates/storm-policy))
+   :tools :all
+   :message-file "storm"}
+
+  {:rule :storm-oscillation
+   :when (samizdat.agent.storm/oscillation-blocked?
+          ctx (samizdat.agent.gates/storm-policy))
+   :tools :all
+   :message-file "storm-oscillation"}
+
+  ;; A whole-file read of a large file pages it through the branch's context
+  ;; at full price, and most of what a branch does with one is not reasoning
+  ;; (karamazov-b76m, after Spotify's shunt: their routing rules in a
+  ;; CLAUDE.md were ignored, and only a hook that refused the read stuck).
+  ;; Steered, not banned: the message names read_digest for the question
+  ;; and the paged read for the section, and a read with an offset or a
+  ;; limit never meets this rule. The threshold is gates.edn :digest.
+  {:rule :large-read-needs-a-digest
+   :when (samizdat.agent.files/large-untargeted-read?
+          ctx (:min-lines (samizdat.agent.gates/digest-policy)))
+   :tools #{"read_file"}
+   :message-file "read-too-large"}
+
+  ;; The same read through the shell. cat and sed out-read read_file across
+  ;; the campaign dbs, so a steer on read_file alone missed most of the
+  ;; reading (karamazov-d5wo.9). Only a lone `cat FILE`: sed -n, head and
+  ;; tail name the section they want, as an offset does.
+  {:rule :large-shell-print-needs-a-digest
+   :when (samizdat.agent.files/large-shell-print?
+          ctx (:min-lines (samizdat.agent.gates/digest-policy)))
+   :tools #{"shell"}
+   :message-file "shell-read-too-large"}
+
+  ;; THE REPL SESSION CONTRACT — its two conditions, as refusals rather than
+  ;; as advice. Nudges are 0-for-6 across two model tiers (karamazov-qic); a
+  ;; withhold is what actually holds.
+  ;;
+  ;; ENTRY. `eval` is refused until the branch has named the files it intends
+  ;; to change. Run bd56a286: a strong model spent 238 turns in the REPL
+  ;; hunting a defect that was in its own tests, because nothing ever made it
+  ;; say WHERE it thought the defect was. Declaring a file is a hypothesis,
+  ;; and the refusal is what forces one to exist before exploring starts.
+  ;;
+  ;; Note this withholds eval only from a branch that has NOT planned — a
+  ;; branch that has said what it is doing may use the REPL freely, which is
+  ;; the difference between this and the blanket eval withhold considered and
+  ;; rejected in karamazov-qic. The mutation protocol does not use the eval
+  ;; TOOL (mutation.clj references eval nowhere), so a supervisor's ability to
+  ;; TUNE the harness never depended on this — which is what this note used to
+  ;; say, and it stopped one line too early. Its ability to LOOK did: the REPL
+  ;; and `introspect` are how the stream reads the image it is reasoning
+  ;; about, and it could reach neither.
+  ;; AND ONLY A BRANCH THAT COULD PLAN. `planned?` is made true by the `plan`
+  ;; tool and by nothing else, so a role whose surface lacks `plan` can never
+  ;; discharge this — the :role-surface rule below declines the very call this
+  ;; one demands. That was the supervisor: shown `eval` in its catalogue,
+  ;; permitted `eval` by roles.edn, and refused it forever. Its first
+  ;; deliberation in run b8ae2b1f spent the pass on this and steered nothing
+  ;; (karamazov-iwm4). Asking whether the branch MAY plan, rather than naming
+  ;; the exempt role, keeps this right if a role gains or loses the tool.
+  ;; AND NOT A PLANNING BRANCH. Its plan IS its product and the plan call
+  ;; ends it, so "call plan first, then the REPL is yours" would tell it to
+  ;; finish before it has read anything. The hypothesis this rule forces is
+  ;; the thing a planning branch is in the middle of forming.
+  {:rule :repl-needs-a-plan
+   :when (and (samizdat.agent.roles/may-use? (:role branch) "plan")
+              (not (samizdat.agent.state/planning? branch))
+              (not (samizdat.agent.state/planned? branch)))
+   :tools #{"eval"}
+   :message-file "repl-needs-a-plan"}
+
+  ;; EXIT. `done` is refused while a declared file is still unwritten. The
+  ;; session closes by LANDING what it said it would, so exploration cannot
+  ;; quietly become the deliverable — T1 of that same run read for 316 turns
+  ;; and wrote nothing.
+  ;; THE ROLE SURFACE, enforced. resources/roles.edn says which tools each role
+  ;; may call; this is what makes that a boundary rather than a suggestion.
+  ;;
+  ;; Without it a role prompt has to argue the model out of capabilities the
+  ;; system prompt advertised — the supervisor's still carries the scar of
+  ;; that, a paragraph explaining its file tools cannot reach the harness
+  ;; source, written after one spent 108 of a run's 211 turns hunting a source
+  ;; tree it was never going to be allowed to open. A role is no longer SHOWN
+  ;; a tool outside its surface; this is the case where it asks anyway.
+  ;;
+  ;; A branch with no :role is unrestricted, so a workflow that names no role
+  ;; behaves exactly as it did before roles existed.
+  {:rule :outside-role-surface
+   :when (not (samizdat.agent.roles/may-use? (:role branch) tool-name))
+   :tools :all
+   :message-file "outside-role-surface"}
+
+  {:rule :plan-not-landed
+   :when (seq (samizdat.agent.state/unwritten branch))
+   :tools #{"done"}
+   :message-file "plan-not-landed"}]
+
+ ;; #3: tool-result signals → branch-state effects. The claim-first state
+ ;; machine as a declarative table instead of cond-> clauses in the
+ ;; executor. A key is a get-in path into the turn envelope
+ ;; {:result <tool return> :artifact <produced artifact>}; when it holds a
+ ;; truthy value, each named effect applies. Effect names dispatch in
+ ;; loop.clj to state fns — a table cannot mutate the branch. The one
+ ;; transition declared here is the green ship-verify: `done` reports
+ ;; :verified-green? from its ship-verify rung, and green work is the green
+ ;; point the safe-state rung rewinds to (it also ends a reframe — the
+ ;; withheld approach could not have produced it, vf-9wx).
+ ;;
+ ;; A value can be matched, not just tested for truth: an entry whose value is
+ ;; a MAP dispatches on what the path holds, `{:confirmed [...]}`. That is
+ ;; what an artifact trigger needs — :claim-status is truthy for :confirmed,
+ ;; :empirical and :sketch alike, so a truthy test would fire the confirmed
+ ;; effects on an unverified plan. A status is a vocabulary, not a flag.
+ ;;
+ ;; The two entries ask DIFFERENT questions, which is why neither subsumes the
+ ;; other. :mark-green keys on the verify signal, because the green point the
+ ;; safe-state rung rewinds to is a fact about the WORKING TREE — the suite was
+ ;; observed passing — and not about any claim. :clear-reframe keys on a
+ ;; confirmed artifact, because that is what clear-reframe has always meant in
+ ;; its own words: the branch banked something the withheld approach could not
+ ;; have produced. Keying it on the artifact rather than on the verify signal
+ ;; makes it general — ANY tool that confirms a claim ends a reframe, not only
+ ;; a green ship-verify, which is the behaviour the docstring already
+ ;; described and the table did not deliver.
+ :transitions {[:result :verified-green?] [:mark-green]
+               [:artifact :claim-status]  {:confirmed [:clear-reframe]}}
+
+ ;; #30: the winner rubric — the ported UCLA FirstProof selector. EDN forms
+ ;; compiled at load by state.clj into the ranking tuple, best-first
+ ;; component order; the forms see `branch` as a local and the fns resolve
+ ;; in state.clj. Components, most important first:
+ ;; non-relaxation > slow-tier-seen > engine-diversity > confirmed-count >
+ ;; id (a stable arbitrary tie-break so the ranking never depends on vector
+ ;; order). A branch that proved the asked claim beats one that proved a
+ ;; weakening; a cross-checked confirmation beats a one-shot; independent
+ ;; engines compose (one Prolog + one Z3 beats two Z3s).
+ :finished-key
+ ;; The first component used to be
+ ;;   (if (:relaxation? (:last-audit branch)) 0 1)
+ ;; and it was a CONSTANT. :last-audit was seeded nil by new-branch and
+ ;; written by nothing, so the component was always 1 and never separated any
+ ;; two branches. The rule it claimed to enforce — a branch that proved the
+ ;; asked claim beats one that proved a weakening — has never once applied.
+ ;; Removed rather than left in: a ranking component that cannot discriminate
+ ;; reads as a rule the harness keeps (karamazov-83p).
+ [(if (contains? (:tiers-seen branch) :slow) 1 0)
+  (count (distinct (keep :kind (confirmed-artifacts branch))))
+  (count (confirmed-artifacts branch))
+  (:id branch)]}
