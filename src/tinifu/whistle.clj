@@ -62,6 +62,16 @@
                             {:path weights-path :error (ffi/ptr->string (needle-last-error))})))))
       (reset! loaded-model weights-path))))
 
+(defn result->json
+  "Result map back to the engine's JSON envelope shape."
+  [{:keys [text language ttft-ms decode-tps words]}]
+  (str "{\"text\":" (json/write-str (or text ""))
+       ",\"language\":" (json/write-str (or language "en"))
+       ",\"ttft_ms\":" (or ttft-ms 0)
+       ",\"decode_tps\":" (or decode-tps 0)
+       (when words (str ",\"words\":" (json/write-str words)))
+       "}"))
+
 (defn transcribe-bytes
   "Raw little-endian float32 mono samples (16 kHz) to a parsed result map.
   language/keywords as in `options`; word-timestamps adds :words."
