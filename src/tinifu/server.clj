@@ -17,9 +17,9 @@
 (ffi/defcfn c-socket "socket" [:int :int :int] :int)
 (ffi/defcfn c-bind "bind" [:int :pointer :int] :int)
 (ffi/defcfn c-listen "listen" [:int :int] :int)
-(ffi/defcfn c-accept "accept" [:int :pointer :pointer] :int)
+(ffi/defcfn c-accept "accept" [:int :pointer :pointer] :int :blocking)
 (ffi/defcfn c-close "close" [:int] :int)
-(ffi/defcfn c-read "read" [:int :pointer :size_t] :ssize_t)
+(ffi/defcfn c-read "read" [:int :pointer :size_t] :ssize_t :blocking)
 (ffi/defcfn c-write "write" [:int :pointer :size_t] :ssize_t)
 (ffi/defcfn c-unlink "unlink" [:string] :int)
 
@@ -98,7 +98,9 @@
         (loop [running true]
           (when running
             (let [stop? (atom false)]
-              (serve-once! fd (assoc handlers :stop-fn (fn [] (reset! stop? true))))
+              ;; a handler failure must not kill the server loop
+              (try (serve-once! fd (assoc handlers :stop-fn (fn [] (reset! stop? true))))
+                   (catch Exception e nil))
               (recur (not @stop?)))))
         (c-close fd)
         (c-unlink path)))))

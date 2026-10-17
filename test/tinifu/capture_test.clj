@@ -3,11 +3,13 @@
             [tinifu.capture :as cap]))
 
 (deftest pw-record-command
-  (is (= ["pw-record" "--rate" "16000" "--channels" "1" "--format" "s16" "--" "/tmp/x.wav"]
+  (is (= ["pw-record" "--rate" "16000" "--channels" "1" "--format" "s16"
+          "--runtime" "30" "--" "/tmp/x.wav"]
          (cap/recorder-command :pw-record "/tmp/x.wav"))))
 
 (deftest arecord-command
-  (is (= ["arecord" "-f" "S16_LE" "-r" "16000" "-c" "1" "-t" "wav" "/tmp/x.wav"]
+  (is (= ["arecord" "-f" "S16_LE" "-r" "16000" "-c" "1" "-t" "wav"
+          "-d" "30" "/tmp/x.wav"]
          (cap/recorder-command :arecord "/tmp/x.wav"))))
 
 (deftest record-uses-first-tool

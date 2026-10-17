@@ -10,9 +10,9 @@
 (def ^:private sock-stream 1)
 
 (ffi/defcfn c-socket "socket" [:int :int :int] :int)
-(ffi/defcfn c-connect "connect" [:int :pointer :int] :int)
+(ffi/defcfn c-connect "connect" [:int :pointer :int] :int :blocking)
 (ffi/defcfn c-close "close" [:int] :int)
-(ffi/defcfn c-read "read" [:int :pointer :size_t] :ssize_t)
+(ffi/defcfn c-read "read" [:int :pointer :size_t] :ssize_t :blocking)
 (ffi/defcfn c-write "write" [:int :pointer :size_t] :ssize_t)
 
 (defn- sockaddr-un

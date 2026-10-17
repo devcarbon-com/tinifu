@@ -4,8 +4,10 @@
   tested; the runner is a fn of a command vector that blocks until exit.")
 
 (def recorder-commands
-  {:pw-record ["pw-record" "--rate" "16000" "--channels" "1" "--format" "s16" "--" "OUT"]
-   :arecord   ["arecord" "-f" "S16_LE" "-r" "16000" "-c" "1" "-t" "wav" "OUT"]})
+  {:pw-record ["pw-record" "--rate" "16000" "--channels" "1" "--format" "s16"
+               "--runtime" "30" "--" "OUT"]
+   :arecord   ["arecord" "-f" "S16_LE" "-r" "16000" "-c" "1" "-t" "wav"
+               "-d" "30" "OUT"]})
 
 (defn recorder-command
   "Command vector for tool, with OUT substituted by the output path."
