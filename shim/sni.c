@@ -100,8 +100,30 @@ static void handle_message(DBusMessage *msg) {
             if (p) strncpy(prop, p, sizeof(prop) - 1);
         }
         const char *v = prop_value(prop);
-        if (v) reply_variant_string(msg, v);
-        /* unhandled property: no reply; caller treats it as an error */
+        if (v) {
+            reply_variant_string(msg, v);
+        } else if (!strcmp(prop, "ItemIsMenu")) {
+            /* waybar queries this on registration; FALSE = Activate is the action */
+            DBusMessage *reply = dbus_message_new_method_return(msg);
+            DBusMessageIter it2, var2;
+            dbus_message_iter_init_append(reply, &it2);
+            dbus_bool_t b = FALSE;
+            dbus_message_iter_open_container(&it2, DBUS_TYPE_VARIANT, "b", &var2);
+            dbus_message_iter_append_basic(&var2, DBUS_TYPE_BOOLEAN, &b);
+            dbus_message_iter_close_container(&it2, &var2);
+            dbus_connection_send(conn, reply, NULL);
+            dbus_connection_flush(conn);
+            dbus_message_unref(reply);
+        } else {
+            /* standard error for unknown properties — waybar tolerates this,
+             * silence makes it drop the item */
+            DBusMessage *e = dbus_message_new_error(
+                msg, "org.freedesktop.DBus.Error.UnknownProperty",
+                "No such property");
+            dbus_connection_send(conn, e, NULL);
+            dbus_connection_flush(conn);
+            dbus_message_unref(e);
+        }
     } else if (dbus_message_is_method_call(msg, "org.freedesktop.DBus.Properties", "GetAll")
                && path && !strcmp(path, "/StatusNotifierItem")) {
         /* waybar calls GetAll when adding an item; no reply = dropped icon */
