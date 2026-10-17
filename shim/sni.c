@@ -72,7 +72,7 @@ static void reply_variant_string(DBusMessage *msg, const char *s) {
 
 
 static const char *prop_value(const char *prop) {
-    if (!strcmp(prop, "Category")) return "SystemServices";
+    if (!strcmp(prop, "Category")) return "ApplicationStatus";
     if (!strcmp(prop, "Id")) return "tinifu";
     if (!strcmp(prop, "Title")) return "tinifu voice input";
     if (!strcmp(prop, "Status")) return item_status;
