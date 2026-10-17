@@ -31,6 +31,10 @@ jolt -A:time -m tinifu.daemon            # or: systemctl --user start tinifu-dae
 
 # one-shot from a keybinding
 jolt -A:time -m tinifu.activate          # record (max 30 s) → type text
+
+# Or build standalone binaries and bind those (no jolt/cwd needed at press):
+jolt -A:time build -m tinifu.ptt -o ~/bin/tinifu-ptt --direct-link
+jolt -A:time build -m tinifu.activate -o ~/bin/tinifu-activate --direct-link
 ```
 
 Socket protocol: one request per connection, `transcribe <wav>` | `status` |
@@ -50,10 +54,11 @@ jolt -A:time -m tinifu.ptt start   # key press    → daemon starts recording
 jolt -A:time -m tinifu.ptt end     # key release  → transcribe + type
 ```
 
-sway: `bindsym KP0 exec ... ptt start` + `bindsym --release KP0 exec ... ptt
-end` (numpad 0 as the hold key; any other key works the same way — e.g. a
-`$mod+z` / `--release $mod+z` chord). Hyprland: `bind` / `bindr` pair with
-`KP_0`. See `packaging/keybindings.conf`.
+sway (using the prebuilt `~/bin/tinifu-ptt` binary): `bindsym KP_0 exec ...
+ptt start` + `bindsym --release KP_0 exec ... ptt end` (numpad 0 as the hold
+key; a `$mod+Shift+minus` / `--release` chord works too — both can be bound
+side by side). Hyprland: `bind` / `bindr` pair with `KP_0`. See
+`packaging/keybindings.conf`.
 
 ## Layout
 
