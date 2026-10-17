@@ -53,15 +53,21 @@
   "Transcribe the ptt wav and inject the text; returns {:text ...} or {:error ...}."
   [state wav]
   (swap! state assoc :state :transcribing)
+  (tray/set-state! {:status "NeedsAttention" :icon "mail-send"
+                    :tooltip "tinifu: transcribing"})
   (let [r (try
             (let [res (whistle/transcribe-bytes
                        (audio/to-f32 (whistle/slurp wav)) {})]
               (when-some [text (:text res)]
                 (inj/inject! text {:runner runner/run}))
               (swap! state assoc :state :idle)
+              (tray/set-state! {:status "Active" :icon "audio-headphones"
+                                :tooltip (str "tinifu: " (:text res))})
               (select-keys res [:text :language]))
             (catch Exception e
               (swap! state assoc :state :idle)
+              (tray/set-state! {:status "NeedsAttention" :icon "dialog-error"
+                                :tooltip "tinifu: error"})
               {:error (str (.getMessage e))}))]
     r))
 
@@ -82,6 +88,8 @@
                          (reset! wav-path wav)
                          (reset! rec-thread t)
                          (swap! state assoc :state :listening :since (System/currentTimeMillis))
+                         (tray/set-state! {:status "Active" :icon "audio-input-microphone"
+                                           :tooltip "tinifu: recording"})
                          (.start t)
                          {})))
      :ptt-end-fn (fn []

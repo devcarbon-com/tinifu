@@ -157,6 +157,9 @@ static void handle_message(DBusMessage *msg) {
 }
 
 int sni_init(const char *name) {
+    /* set_state! can be called from the socket thread while the tray thread
+     * polls — libdbus connections need internal locking */
+    dbus_threads_init_default();
     dbus_error_init(&err);
     conn = dbus_bus_get(DBUS_BUS_SESSION, &err);
     if (!conn || dbus_error_is_set(&err)) return -1;
@@ -179,10 +182,31 @@ int sni_init(const char *name) {
     return r; /* 1 = primary owner */
 }
 
+static void emit_signal(const char *member, const char *signature,
+                        const char *value) {
+    DBusMessage *sig = dbus_message_new_signal("/StatusNotifierItem",
+                                               "org.kde.StatusNotifierItem",
+                                               member);
+    if (!sig) return;
+    if (signature) {
+        DBusMessageIter iter;
+        dbus_message_iter_init_append(sig, &iter);
+        dbus_message_iter_append_basic(&iter, DBUS_TYPE_STRING, &value);
+    }
+    dbus_connection_send(conn, sig, NULL);
+    dbus_connection_flush(conn);
+    dbus_message_unref(sig);
+}
+
 void sni_set_state(const char *status, const char *icon, const char *tooltip) {
+    const char *old_icon = item_icon;
     if (status) strncpy(item_status, status, sizeof(item_status) - 1);
     if (icon) strncpy(item_icon, icon, sizeof(item_icon) - 1);
     if (tooltip) strncpy(item_tooltip, tooltip, sizeof(item_tooltip) - 1);
+    /* hosts cache properties at registration; without NewIcon/NewStatus
+     * they never re-read them and the icon stays stale */
+    if (icon && strcmp(icon, old_icon) != 0) emit_signal("NewIcon", NULL, NULL);
+    if (status) emit_signal("NewStatus", "s", status);
 }
 
 int sni_poll(int timeout_ms) {
