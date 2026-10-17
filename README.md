@@ -1,12 +1,14 @@
 # tinifu
 
-Speech-to-text for Linux that types into whatever window has focus. Hold a
+Tiny, lightweight, fast speech-to-text tool for Linux that types into whatever window has focus. Hold a
 hotkey, speak, and your words appear as keystrokes — push-to-talk style, on
 any Wayland compositor. It also works as a plain CLI that transcribes WAV
 files.
 
+Powered by Cactus Compute's [Whistle](https://cactuscompute.com/blog/whistle) TTS model and [Jolt] (Clojure dialect that runs on scheme and speaks C). (https://github.com/jolt-lang)
+
 Fully local: the Cactus Whistle model runs on-device through a native engine.
-No cloud, no account, no Python.
+No cloud, no account, no JVM, no Python.
 
 ## Install
 
@@ -28,7 +30,7 @@ git clone https://github.com/devcarbon-com/tinifu && cd tinifu
 ./scripts/setup.sh   # downloads the engine + model, builds the tray shim
 ```
 
-You'll also want for the voice-input features:
+You'll also want (and probably have on most wayland setups) these for the voice-input features:
 
 - `pw-record` (PipeWire) or `arecord` — recording
 - `wtype` (or `ydotool`) — typing text
@@ -45,7 +47,7 @@ tinifu transcribe clip.wav
 Or start the voice daemon and set up a hotkey:
 
 ```sh
-tinifu daemon            # loads the model (~10 s), then serves + tray icon
+tinifu daemon            # loads the model then serves + tray icon
 ```
 
 Bind a key in your compositor (snippets for sway, Hyprland, and KDE are in
@@ -90,7 +92,7 @@ arguments for usage.
 - The daemon serves a Unix socket (`$TINIFU_SOCK` or
   `$XDG_RUNTIME_DIR/tinifu.sock`) with one JSON-line response per request:
   `transcribe <wav>` | `status` | `stop`.
-- A tray icon (SNI) shows daemon state, for bars that support it. Prebuilt
+- A tray icon (SNI) shows daemon state, for toolbars that support it. Prebuilt
   binaries carry the shim; from source, `scripts/setup.sh` builds it.
 - From source, commands run as `jolt -A:time -m tinifu.main <command>`; build
   a standalone binary with
