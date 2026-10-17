@@ -4,7 +4,7 @@ After=graphical-session.target pipewire.service
 PartOf=graphical-session.target
 
 [Service]
-ExecStart=%h/.local/bin/jolt -A:time -m tinifu.daemon
+ExecStart=%h/bin/tinifu-daemon
 WorkingDirectory=%h/projects/tinifu
 Restart=on-failure
 RestartSec=3
