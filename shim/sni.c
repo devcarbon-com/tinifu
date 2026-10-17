@@ -199,9 +199,10 @@ static void emit_signal(const char *member, const char *signature,
 }
 
 void sni_set_state(const char *status, const char *icon, const char *tooltip) {
-    const char *old_icon = item_icon;
+    char old_icon[128];
+    strncpy(old_icon, item_icon, sizeof(old_icon) - 1);
+    old_icon[sizeof(old_icon) - 1] = '\0';
     if (status) strncpy(item_status, status, sizeof(item_status) - 1);
-    if (icon) strncpy(item_icon, icon, sizeof(item_icon) - 1);
     if (tooltip) strncpy(item_tooltip, tooltip, sizeof(item_tooltip) - 1);
     /* hosts cache properties at registration; without NewIcon/NewStatus
      * they never re-read them and the icon stays stale */
