@@ -44,7 +44,6 @@ static const char *INTROSPECTION_XML =
 "<property name=\"Title\" type=\"s\" access=\"read\"/>"
 "<property name=\"Status\" type=\"s\" access=\"read\"/>"
 "<property name=\"IconName\" type=\"s\" access=\"read\"/>"
-"<property name=\"ToolTip\" type=\"s\" access=\"read\"/>"
 "</interface>"
 "</node>";
 
@@ -71,13 +70,13 @@ static void reply_variant_string(DBusMessage *msg, const char *s) {
     dbus_message_unref(reply);
 }
 
+
 static const char *prop_value(const char *prop) {
     if (!strcmp(prop, "Category")) return "SystemServices";
     if (!strcmp(prop, "Id")) return "tinifu";
     if (!strcmp(prop, "Title")) return "tinifu voice input";
     if (!strcmp(prop, "Status")) return item_status;
     if (!strcmp(prop, "IconName")) return item_icon;
-    if (!strcmp(prop, "ToolTip")) return item_tooltip;
     return NULL;
 }
 
@@ -103,6 +102,28 @@ static void handle_message(DBusMessage *msg) {
         const char *v = prop_value(prop);
         if (v) reply_variant_string(msg, v);
         /* unhandled property: no reply; caller treats it as an error */
+    } else if (dbus_message_is_method_call(msg, "org.freedesktop.DBus.Properties", "GetAll")
+               && path && !strcmp(path, "/StatusNotifierItem")) {
+        /* waybar calls GetAll when adding an item; no reply = dropped icon */
+        DBusMessage *reply = dbus_message_new_method_return(msg);
+        DBusMessageIter iter, dict, entry, var;
+        dbus_message_iter_init_append(reply, &iter);
+        dbus_message_iter_open_container(&iter, DBUS_TYPE_ARRAY, "{sv}", &dict);
+        const char *props[] = {"Category", "Id", "Title", "Status", "IconName"};
+        for (unsigned i = 0; i < sizeof(props) / sizeof(props[0]); i++) {
+            const char *k = props[i];
+            const char *v = prop_value(k);
+            dbus_message_iter_open_container(&dict, DBUS_TYPE_DICT_ENTRY, NULL, &entry);
+            dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &k);
+            dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "s", &var);
+            dbus_message_iter_append_basic(&var, DBUS_TYPE_STRING, &v);
+            dbus_message_iter_close_container(&entry, &var);
+            dbus_message_iter_close_container(&dict, &entry);
+        }
+        dbus_message_iter_close_container(&iter, &dict);
+        dbus_connection_send(conn, reply, NULL);
+        dbus_connection_flush(conn);
+        dbus_message_unref(reply);
     } else if (dbus_message_is_method_call(msg, "org.kde.StatusNotifierItem", "Activate")) {
         activate_flag = 1;
         reply_string(msg, "");
